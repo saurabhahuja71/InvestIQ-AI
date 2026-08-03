@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../constants/app_constants.dart';
 import '../storage/secure_storage.dart';
+import 'api_exception.dart';
 
 final dioProvider = Provider<Dio>((ref) {
   final storage = ref.watch(secureStorageProvider);
@@ -11,7 +12,11 @@ final dioProvider = Provider<Dio>((ref) {
       baseUrl: '${AppConstants.apiBaseUrl}/api/v1',
       connectTimeout: const Duration(seconds: 20),
       receiveTimeout: const Duration(seconds: 30),
-      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      validateStatus: (s) => s != null && s >= 200 && s < 300,
     ),
   );
 
@@ -35,11 +40,26 @@ final dioProvider = Provider<Dio>((ref) {
               final clone = await dio.fetch(req);
               return handler.resolve(clone);
             } catch (e) {
-              return handler.next(error);
+              return handler.reject(
+                DioException(
+                  requestOptions: error.requestOptions,
+                  error: AppException.fromDio(e),
+                  response: error.response,
+                  type: error.type,
+                ),
+              );
             }
           }
         }
-        handler.next(error);
+        handler.reject(
+          DioException(
+            requestOptions: error.requestOptions,
+            error: AppException.fromDio(error),
+            response: error.response,
+            type: error.type,
+            message: AppException.fromDio(error).message,
+          ),
+        );
       },
     ),
   );
@@ -67,24 +87,16 @@ Future<bool> _tryRefresh(Dio dio, SecureStorageService storage) async {
   }
 }
 
-class ApiException implements Exception {
-  ApiException(this.message, {this.code, this.statusCode});
-  final String message;
-  final String? code;
-  final int? statusCode;
-
-  @override
-  String toString() => message;
-}
-
 T unwrapData<T>(Response response, T Function(dynamic json) map) {
   final body = response.data;
   if (body is Map && body['success'] == true) {
     return map(body['data']);
   }
   final err = body is Map ? body['error'] : null;
-  throw ApiException(
-    err is Map ? (err['message']?.toString() ?? 'Request failed') : 'Request failed',
+  throw AppException(
+    err is Map
+        ? (err['message']?.toString() ?? 'Request failed')
+        : 'Request failed',
     code: err is Map ? err['code']?.toString() : null,
     statusCode: response.statusCode,
   );

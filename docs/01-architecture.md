@@ -201,7 +201,7 @@ Internet → CDN/WAF → Nginx/Caddy → Axum (n replicas)
            (primary)   (cache)   (screenshots)
 ```
 
-Docker Compose for local/staging; Kubernetes optional for production scale.
+Podman Compose for local/staging; Kubernetes optional for production scale.
 
 ---
 
@@ -211,4 +211,4 @@ Docker Compose for local/staging; Kubernetes optional for production scale.
 - Integration: sqlx tests against Postgres
 - Widget/golden tests: key screens
 - API contract tests
-- CI: lint, test, build, Docker image, security scan
+- CI: lint, test, build, container image, security scan

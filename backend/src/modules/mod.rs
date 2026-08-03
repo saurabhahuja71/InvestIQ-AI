@@ -1,7 +1,8 @@
-pub mod auth;
 pub mod ai;
+pub mod auth;
+pub mod common;
 pub mod health;
 pub mod ipo;
 pub mod journal;
+pub mod notifications;
 pub mod portfolio;
-pub mod common;

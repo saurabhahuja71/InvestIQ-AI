@@ -1,4 +1,4 @@
-//! Portfolio analytics: XIRR (Newton-Raphson) and CAGR.
+//! Portfolio analytics: XIRR (Newton-Raphson), CAGR, and P&L helpers.
 
 use chrono::NaiveDate;
 use rust_decimal::prelude::ToPrimitive;
@@ -58,6 +58,12 @@ pub fn decimal_to_f64(d: Decimal) -> f64 {
     d.to_f64().unwrap_or(0.0)
 }
 
+/// Years between two dates using day count / 365.25
+pub fn years_between(start: NaiveDate, end: NaiveDate) -> f64 {
+    let days = (end - start).num_days().max(0) as f64;
+    days / 365.25
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -77,5 +83,17 @@ mod tests {
         ];
         let r = xirr(&flows, 0.1).unwrap();
         assert!((r - 0.1).abs() < 0.001);
+    }
+
+    #[test]
+    fn cagr_doubles_in_one_year() {
+        let r = cagr(100.0, 200.0, 1.0).unwrap();
+        assert!((r - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn cagr_rejects_bad_inputs() {
+        assert!(cagr(0.0, 100.0, 1.0).is_none());
+        assert!(cagr(100.0, 100.0, 0.0).is_none());
     }
 }

@@ -20,6 +20,9 @@ pub fn router() -> Router<AppState> {
         .route("/refresh", post(refresh))
         .route("/logout", post(logout))
         .route("/me", get(me).patch(update_me))
+        .route("/change-password", post(change_password))
+        .route("/export", post(export_data))
+        .route("/account", axum::routing::delete(delete_account))
 }
 
 fn token_hash(token: &str) -> String {
@@ -79,6 +82,29 @@ async fn login(
         .map_err(|e| AppError::Validation(e.to_string()))?;
 
     let email = body.email.trim().to_lowercase();
+    let status: Option<String> = sqlx::query_scalar(
+        r#"SELECT status::text FROM users WHERE email = $1"#,
+    )
+    .bind(&email)
+    .fetch_optional(state.db())
+    .await?;
+
+    match status.as_deref() {
+        Some("suspended") => {
+            return Err(AppError::Forbidden("account suspended".into()));
+        }
+        Some("deleted") => {
+            return Err(AppError::Forbidden("account deleted".into()));
+        }
+        Some("active") => {}
+        Some(_) => {
+            return Err(AppError::Forbidden("account not allowed to login".into()));
+        }
+        None => {
+            return Err(AppError::Unauthorized("invalid credentials".into()));
+        }
+    }
+
     let user = sqlx::query_as::<_, UserRow>(
         r#"
         SELECT id, email, password_hash, full_name, preferred_currency,
@@ -252,4 +278,160 @@ async fn update_me(
     .await?;
 
     Ok(Json(ApiResponse::ok(row.into())))
+}
+
+async fn change_password(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Json(body): Json<ChangePasswordRequest>,
+) -> AppResult<Json<ApiResponse<&'static str>>> {
+    body.validate()
+        .map_err(|e| AppError::Validation(e.to_string()))?;
+
+    let hash: String = sqlx::query_scalar(r#"SELECT password_hash FROM users WHERE id = $1"#)
+        .bind(user.user_id)
+        .fetch_one(state.db())
+        .await?;
+
+    if !verify_password(&body.current_password, &hash)? {
+        return Err(AppError::Unauthorized("current password is incorrect".into()));
+    }
+
+    let new_hash = hash_password(&body.new_password)?;
+    sqlx::query(r#"UPDATE users SET password_hash = $2, updated_at = NOW() WHERE id = $1"#)
+        .bind(user.user_id)
+        .bind(&new_hash)
+        .execute(state.db())
+        .await?;
+
+    sqlx::query(
+        r#"UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL"#,
+    )
+    .bind(user.user_id)
+    .execute(state.db())
+    .await?;
+
+    tracing::info!(email = %user.email, "password changed; sessions revoked");
+    Ok(Json(ApiResponse::ok("password changed")))
+}
+
+async fn export_data(
+    State(state): State<AppState>,
+    user: AuthUser,
+) -> AppResult<Json<ApiResponse<serde_json::Value>>> {
+    let profile = sqlx::query_as::<_, UserRow>(
+        r#"
+        SELECT id, email, password_hash, full_name, preferred_currency,
+               preferred_locale, theme_preference, biometric_enabled,
+               email_verified, created_at
+        FROM users WHERE id = $1
+        "#,
+    )
+    .bind(user.user_id)
+    .fetch_one(state.db())
+    .await?;
+
+    let portfolios = sqlx::query_scalar::<_, serde_json::Value>(
+        r#"
+        SELECT COALESCE(json_agg(row_to_json(p)), '[]'::json)
+        FROM (SELECT id, name, base_currency, is_default, created_at FROM portfolios WHERE user_id = $1) p
+        "#,
+    )
+    .bind(user.user_id)
+    .fetch_one(state.db())
+    .await?;
+
+    let trades = sqlx::query_scalar::<_, serde_json::Value>(
+        r#"
+        SELECT COALESCE(json_agg(row_to_json(t)), '[]'::json)
+        FROM (
+          SELECT id, symbol, side::text, strategy_name, entry_price, exit_price, quantity,
+                 entry_at, exit_at, pnl, notes, tags, created_at
+          FROM journal_trades WHERE user_id = $1 AND deleted_at IS NULL
+        ) t
+        "#,
+    )
+    .bind(user.user_id)
+    .fetch_one(state.db())
+    .await?;
+
+    let watchlist = sqlx::query_scalar::<_, serde_json::Value>(
+        r#"
+        SELECT COALESCE(json_agg(row_to_json(w)), '[]'::json)
+        FROM (
+          SELECT ipo_id, created_at FROM ipo_watchlist WHERE user_id = $1
+        ) w
+        "#,
+    )
+    .bind(user.user_id)
+    .fetch_one(state.db())
+    .await?;
+
+    let mut payload = serde_json::json!({
+        "exported_at": chrono::Utc::now(),
+        "user": PublicUser::from(profile),
+        "portfolios": portfolios,
+        "journal_trades": trades,
+        "ipo_watchlist": watchlist,
+    });
+
+    // Optional field-level encryption seal for at-rest export archive metadata
+    if let Some(cipher) = state.cipher() {
+        let plaintext = format!("export:{}", user.user_id);
+        let seal = cipher.encrypt_str(&plaintext)?;
+        // Round-trip verify so decrypt path is exercised in production configs
+        let verified = cipher.decrypt_str(&seal)?;
+        if verified != plaintext {
+            return Err(AppError::Internal("export seal verification failed".into()));
+        }
+        payload
+            .as_object_mut()
+            .map(|o| o.insert("integrity_seal".into(), serde_json::json!(seal)));
+    }
+
+    sqlx::query(
+        r#"INSERT INTO data_export_jobs (user_id, status, payload) VALUES ($1, 'completed', $2)"#,
+    )
+    .bind(user.user_id)
+    .bind(&payload)
+    .execute(state.db())
+    .await?;
+
+    Ok(Json(ApiResponse::ok(payload)))
+}
+
+async fn delete_account(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Json(body): Json<DeleteAccountRequest>,
+) -> AppResult<Json<ApiResponse<&'static str>>> {
+    if body.confirm != "DELETE" {
+        return Err(AppError::Validation(
+            "confirm must be the string DELETE".into(),
+        ));
+    }
+
+    let hash: String = sqlx::query_scalar(r#"SELECT password_hash FROM users WHERE id = $1"#)
+        .bind(user.user_id)
+        .fetch_one(state.db())
+        .await?;
+
+    if !verify_password(&body.password, &hash)? {
+        return Err(AppError::Unauthorized("password is incorrect".into()));
+    }
+
+    sqlx::query(
+        r#"UPDATE users SET status = 'deleted', email = email || '.deleted.' || id::text, updated_at = NOW() WHERE id = $1"#,
+    )
+    .bind(user.user_id)
+    .execute(state.db())
+    .await?;
+
+    sqlx::query(r#"DELETE FROM users WHERE id = $1"#)
+        .bind(user.user_id)
+        .execute(state.db())
+        .await?;
+
+    tracing::info!(email = %user.email, "account deleted");
+    Ok(Json(ApiResponse::ok("account deleted")))
 }

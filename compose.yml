@@ -1,6 +1,8 @@
-# Deprecated alias for tools that still look for docker-compose.yml.
-# Prefer: podman compose -f compose.yml
-# This file mirrors compose.yml for compatibility.
+# InvestIQ AI — Podman Compose (compatible with podman compose / podman-compose)
+# Usage:
+#   podman compose up -d postgres redis
+#   podman compose up -d --build
+#   podman compose down
 
 services:
   postgres:

@@ -15,7 +15,7 @@ pub struct PortfolioRow {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize, FromRow, Clone)]
 pub struct HoldingRow {
     pub id: Uuid,
     pub portfolio_id: Uuid,
@@ -28,6 +28,9 @@ pub struct HoldingRow {
     pub currency: String,
     pub sector: Option<String>,
     pub exchange: Option<String>,
+    pub last_price: Option<Decimal>,
+    pub prev_close: Option<Decimal>,
+    pub price_as_of: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -42,6 +45,14 @@ pub struct CreateHolding {
     pub currency: Option<String>,
     pub sector: Option<String>,
     pub exchange: Option<String>,
+    /// Optional current market price; defaults to avg_cost
+    pub last_price: Option<Decimal>,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct UpdateHoldingPrice {
+    pub last_price: Decimal,
+    pub prev_close: Option<Decimal>,
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -87,6 +98,7 @@ pub struct AllocationSlice {
 pub struct PortfolioAnalytics {
     pub total_value: Decimal,
     pub total_cost: Decimal,
+    pub unrealized_pnl: Decimal,
     pub today_pnl: Decimal,
     pub today_pnl_pct: f64,
     pub overall_return_pct: f64,

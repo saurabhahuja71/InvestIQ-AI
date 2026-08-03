@@ -35,6 +35,19 @@ pub struct UpdateProfileRequest {
     pub biometric_enabled: Option<bool>,
 }
 
+#[derive(Debug, Deserialize, Validate)]
+pub struct ChangePasswordRequest {
+    pub current_password: String,
+    #[validate(length(min = 8, max = 128))]
+    pub new_password: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DeleteAccountRequest {
+    pub password: String,
+    pub confirm: String,
+}
+
 #[derive(Debug, Serialize, FromRow)]
 pub struct UserRow {
     pub id: Uuid,

@@ -303,12 +303,41 @@ async fn allotment_check(
     Path(id): Path<Uuid>,
     Json(body): Json<AllotmentRequest>,
 ) -> AppResult<Json<ApiResponse<AllotmentResult>>> {
-    // Placeholder: integrate registrar APIs in production
-    let result = AllotmentResult {
-        status: "unknown".into(),
-        shares: None,
-        message: "Allotment status could not be verified automatically. Please check with the registrar. This is not a confirmation of allotment.".into(),
-    };
+    #[derive(sqlx::FromRow)]
+    struct IpoAllotMeta {
+        status: String,
+        lot_size: Option<i32>,
+        subscription_total: Option<rust_decimal::Decimal>,
+    }
+
+    let meta = sqlx::query_as::<_, IpoAllotMeta>(
+        r#"
+        SELECT status::text AS status, lot_size, subscription_total
+        FROM ipos WHERE id = $1
+        "#,
+    )
+    .bind(id)
+    .fetch_optional(state.db())
+    .await?
+    .ok_or_else(|| AppError::NotFound("IPO not found".into()))?;
+
+    if let Some(ref pan) = body.pan_last4 {
+        if pan.len() != 4 || !pan.chars().all(|c| c.is_ascii_alphanumeric()) {
+            return Err(AppError::Validation(
+                "pan_last4 must be exactly 4 alphanumeric characters".into(),
+            ));
+        }
+    }
+
+    let result = crate::modules::ipo::allotment::compute_allotment(
+        id,
+        user.user_id,
+        &meta.status,
+        meta.lot_size,
+        meta.subscription_total,
+        body.pan_last4.as_deref(),
+        body.application_number.as_deref(),
+    );
 
     sqlx::query(
         r#"
@@ -324,6 +353,27 @@ async fn allotment_check(
     .bind(result.shares)
     .execute(state.db())
     .await?;
+
+    // In-app notification when allotment is decided
+    if result.status == "allotted" || result.status == "not_allotted" {
+        let title = if result.status == "allotted" {
+            "IPO allotment (indicative)"
+        } else {
+            "IPO not allotted (indicative)"
+        };
+        let _ = sqlx::query(
+            r#"
+            INSERT INTO notifications (user_id, notif_type, title, body, payload)
+            VALUES ($1, 'allotment', $2, $3, $4)
+            "#,
+        )
+        .bind(user.user_id)
+        .bind(title)
+        .bind(&result.message)
+        .bind(serde_json::json!({ "ipo_id": id, "status": result.status, "shares": result.shares }))
+        .execute(state.db())
+        .await;
+    }
 
     Ok(Json(ApiResponse::ok(result)))
 }

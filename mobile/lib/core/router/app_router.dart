@@ -11,6 +11,7 @@ import '../../features/ipo/presentation/ipo_detail_screen.dart';
 import '../../features/ipo/presentation/ipo_list_screen.dart';
 import '../../features/journal/presentation/journal_screen.dart';
 import '../../features/journal/presentation/trade_entry_screen.dart';
+import '../../features/notifications/presentation/notifications_screen.dart';
 import '../../features/portfolio/presentation/portfolio_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../widgets/main_shell.dart';
@@ -76,6 +77,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
       GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
+      GoRoute(
+        path: '/notifications',
+        builder: (_, __) => const NotificationsScreen(),
+      ),
+      GoRoute(
+        path: '/notifications/prefs',
+        builder: (_, __) => const NotificationPrefsScreen(),
+      ),
     ],
   );
 });

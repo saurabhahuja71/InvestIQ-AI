@@ -72,7 +72,20 @@ class PortfolioScreen extends ConsumerWidget {
                                 ? '—'
                                 : '${((analytics['xirr'] as num) * 100).toStringAsFixed(1)}%',
                           ),
-                          _metric('Today', '₹${analytics['today_pnl'] ?? 0}'),
+                          _metric(
+                            'CAGR',
+                            analytics['cagr'] == null
+                                ? '—'
+                                : '${((analytics['cagr'] as num) * 100).toStringAsFixed(1)}%',
+                          ),
+                          _metric(
+                            'Today',
+                            '₹${analytics['today_pnl'] ?? 0} (${(analytics['today_pnl_pct'] as num?)?.toStringAsFixed(2) ?? '0'}%)',
+                          ),
+                          _metric(
+                            'Unrealized',
+                            '₹${analytics['unrealized_pnl'] ?? 0}',
+                          ),
                         ],
                       ),
                     ],

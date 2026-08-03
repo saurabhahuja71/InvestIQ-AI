@@ -19,7 +19,7 @@ Full phased plan: **[docs/05-roadmap.md](docs/05-roadmap.md)**.
 | Mobile | Flutter (Material 3), Riverpod, go_router |
 | API | Rust + Axum, JWT, Argon2 |
 | Data | PostgreSQL 16, Redis 7 |
-| Ops | Docker Compose, GitHub Actions |
+| Ops | **Podman Compose**, dnf host packages, GitHub Actions |
 
 ---
 
@@ -32,7 +32,12 @@ InvestIQ-AI/
 │   ├── migrations/       # SQL migrations + seed IPOs
 │   └── src/modules/      # auth, ipo, portfolio, journal, ai
 ├── mobile/               # Flutter application
-├── docker-compose.yml
+├── compose.yml           # Podman Compose (preferred)
+├── docker-compose.yml    # Compatibility alias
+├── scripts/
+│   ├── install-deps-dnf.sh
+│   ├── compose.sh
+│   └── dev.sh
 ├── .github/workflows/ci.yml
 └── .env.example
 ```
@@ -47,38 +52,41 @@ InvestIQ-AI/
 4. [Navigation & wireframes](docs/04-navigation-and-wireframes.md)
 5. [Roadmap MVP → production](docs/05-roadmap.md)
 6. [Deployment](docs/06-deployment.md)
+7. [Podman + dnf setup](docs/09-podman-dnf-setup.md)
+8. **[Run locally (full guide)](docs/10-local-run.md)** ← start here for day-to-day dev
 
 ---
 
 ## Quick start
 
-### 1. Backend (API)
+**Full step-by-step:** [docs/10-local-run.md](docs/10-local-run.md)
+
+### Minimal path
 
 ```bash
-cp .env.example .env
-docker compose up -d postgres redis
-cd backend
-cargo run
-# listens on http://0.0.0.0:8080
-curl http://localhost:8080/health
-```
+# Once: host packages
+./scripts/install-deps-dnf.sh
 
-Or full stack:
+cp -n .env.example .env
+./scripts/compose.sh up -d postgres redis   # Podman: Postgres + Redis
 
-```bash
-docker compose up --build
-```
+# Terminal 1 — API
+source "$HOME/.cargo/env"
+cd backend && cargo run
+# curl http://127.0.0.1:8080/health
 
-### 2. Mobile (Flutter)
-
-```bash
+# Terminal 2 — Flutter (Chrome)
+export PATH="$HOME/development/flutter/bin:$PATH"
 cd mobile
-flutter create . --project-name investiq_ai   # generate android/ios once
 flutter pub get
-# Android emulator → host machine API:
-flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8080
-# iOS simulator:
-flutter run --dart-define=API_BASE_URL=http://127.0.0.1:8080
+flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8080
+```
+
+Helpers:
+
+```bash
+./scripts/dev.sh                 # compose DBs + cargo run
+./scripts/compose.sh up -d --build   # full stack in Podman
 ```
 
 ---

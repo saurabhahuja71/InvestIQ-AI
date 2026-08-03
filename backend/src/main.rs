@@ -1,13 +1,15 @@
 mod config;
 mod error;
+mod infra;
 mod middleware;
+mod modules;
 mod routes;
 mod state;
-mod modules;
-mod infra;
 
 use std::net::SocketAddr;
-use tower_http::cors::{Any, CorsLayer};
+
+use axum::http::{HeaderValue, Method};
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -22,24 +24,27 @@ async fn main() -> anyhow::Result<()> {
 
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-            "investiq_api=debug,tower_http=info,sqlx=warn".into()
+            "investiq_api=info,tower_http=info,sqlx=warn".into()
         }))
-        .with(tracing_subscriber::fmt::layer())
+        .with(tracing_subscriber::fmt::layer().json())
         .init();
 
     let config = Config::from_env()?;
+    tracing::info!(
+        env = %config.app_env,
+        rate_limit_rps = config.rate_limit_rps,
+        ai_remote = config.ai_api_key.as_ref().map(|k| !k.is_empty()).unwrap_or(false),
+        "starting InvestIQ AI API"
+    );
+
     let state = AppState::new(config.clone()).await?;
 
-    // Run migrations on startup in dev; use dedicated job in prod if preferred
     sqlx::migrate!("./migrations")
         .run(&state.db)
         .await
         .map_err(|e| anyhow::anyhow!("migration failed: {e}"))?;
 
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+    let cors = build_cors(&config)?;
 
     let app = build_router(state)
         .layer(TraceLayer::new_for_http())
@@ -48,14 +53,56 @@ async fn main() -> anyhow::Result<()> {
         .layer(cors);
 
     let addr: SocketAddr = format!("{}:{}", config.host, config.port).parse()?;
-    tracing::info!("InvestIQ AI API listening on {addr}");
+    tracing::info!(%addr, "listening");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await?;
 
     Ok(())
+}
+
+fn build_cors(config: &Config) -> anyhow::Result<CorsLayer> {
+    if config.cors_origins.len() == 1 && config.cors_origins[0] == "*" {
+        if config.is_production() {
+            anyhow::bail!("CORS_ORIGINS must not be * in production");
+        }
+        return Ok(CorsLayer::new()
+            .allow_origin(tower_http::cors::Any)
+            .allow_methods([
+                Method::GET,
+                Method::POST,
+                Method::PUT,
+                Method::PATCH,
+                Method::DELETE,
+                Method::OPTIONS,
+            ])
+            .allow_headers(tower_http::cors::Any));
+    }
+
+    let origins: Result<Vec<HeaderValue>, _> = config
+        .cors_origins
+        .iter()
+        .map(|o| o.parse::<HeaderValue>())
+        .collect();
+    let origins = origins.map_err(|e| anyhow::anyhow!("invalid CORS origin: {e}"))?;
+
+    Ok(CorsLayer::new()
+        .allow_origin(AllowOrigin::list(origins))
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers(tower_http::cors::Any)
+        .allow_credentials(true))
 }
 
 async fn shutdown_signal() {

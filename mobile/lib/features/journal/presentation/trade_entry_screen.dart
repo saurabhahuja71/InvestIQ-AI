@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/offline/offline_cache.dart';
 import 'journal_screen.dart';
 
 class TradeEntryScreen extends ConsumerStatefulWidget {
@@ -50,30 +51,47 @@ class _TradeEntryScreenState extends ConsumerState<TradeEntryScreen> {
 
   Future<void> _save() async {
     setState(() => _saving = true);
+    final body = {
+      'symbol': _symbol.text.trim().toUpperCase(),
+      'side': _side,
+      'entry_price': _entry.text,
+      'exit_price': _exit.text.isEmpty ? null : _exit.text,
+      'quantity': _qty.text,
+      'entry_at': DateTime.now().toUtc().toIso8601String(),
+      'exit_at':
+          _exit.text.isEmpty ? null : DateTime.now().toUtc().toIso8601String(),
+      'strategy_name':
+          _strategy.text.trim().isEmpty ? null : _strategy.text.trim(),
+      'risk_reward': _rr.text.isEmpty ? null : _rr.text,
+      'emotion_before': _emotionBefore,
+      'emotion_after': _emotionAfter,
+      'notes': _notes.text.trim().isEmpty ? null : _notes.text.trim(),
+      'tags': <String>[],
+    };
     try {
       final dio = ref.read(dioProvider);
-      await dio.post('/journal/trades', data: {
-        'symbol': _symbol.text.trim().toUpperCase(),
-        'side': _side,
-        'entry_price': _entry.text,
-        'exit_price': _exit.text.isEmpty ? null : _exit.text,
-        'quantity': _qty.text,
-        'entry_at': DateTime.now().toUtc().toIso8601String(),
-        'exit_at': _exit.text.isEmpty ? null : DateTime.now().toUtc().toIso8601String(),
-        'strategy_name':
-            _strategy.text.trim().isEmpty ? null : _strategy.text.trim(),
-        'risk_reward': _rr.text.isEmpty ? null : _rr.text,
-        'emotion_before': _emotionBefore,
-        'emotion_after': _emotionAfter,
-        'notes': _notes.text.trim().isEmpty ? null : _notes.text.trim(),
-        'tags': <String>[],
-      });
+      await dio.post('/journal/trades', data: body);
       ref.invalidate(journalTradesProvider);
       ref.invalidate(journalAnalyticsProvider);
       if (mounted) context.pop();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      // Offline queue for later sync
+      try {
+        final cache = ref.read(offlineCacheProvider);
+        await cache.enqueueWrite('/journal/trades', 'POST', body);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Saved offline — will sync when connected'),
+            ),
+          );
+          context.pop();
+        }
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('$e')));
+        }
       }
     } finally {
       if (mounted) setState(() => _saving = false);

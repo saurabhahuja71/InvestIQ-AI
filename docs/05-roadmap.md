@@ -38,7 +38,7 @@ Build **only** these four products end-to-end:
 - [x] Monorepo, architecture docs
 - [x] Axum skeleton: auth, IPO, portfolio, journal, AI modules
 - [x] Flutter shell + four feature UIs
-- [ ] Stable local Docker runbook used by whole team
+- [x] Stable local Podman Compose + dnf install runbook (`docs/09-podman-dnf-setup.md`)
 - [ ] Store listing assets (icon, screenshots, privacy policy URL)
 
 ### Phase 1 — MVP hardening (next)

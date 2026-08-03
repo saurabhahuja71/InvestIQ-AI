@@ -163,32 +163,7 @@ class IpoDetailScreen extends ConsumerWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: () async {
-                        final dio = ref.read(dioProvider);
-                        final res = await dio.post(
-                          '/ipos/$id/allotment-check',
-                          data: {},
-                        );
-                        final data = unwrapData(
-                          res,
-                          (d) => Map<String, dynamic>.from(d as Map),
-                        );
-                        if (context.mounted) {
-                          showDialog(
-                            context: context,
-                            builder: (_) => AlertDialog(
-                              title: const Text('Allotment'),
-                              content: Text(data['message']?.toString() ?? ''),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: const Text('OK'),
-                                ),
-                              ],
-                            ),
-                          );
-                        }
-                      },
+                      onPressed: () => _checkAllotment(context, ref, id),
                       icon: const Icon(Icons.fact_check_outlined),
                       label: const Text('Allotment'),
                     ),
@@ -202,6 +177,81 @@ class IpoDetailScreen extends ConsumerWidget {
         error: (e, _) => Center(child: Text('$e')),
       ),
     );
+  }
+
+  Future<void> _checkAllotment(
+    BuildContext context,
+    WidgetRef ref,
+    String ipoId,
+  ) async {
+    final pan = TextEditingController();
+    final appNo = TextEditingController();
+    final submitted = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Allotment check'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: pan,
+              maxLength: 4,
+              decoration: const InputDecoration(
+                labelText: 'PAN last 4',
+                counterText: '',
+              ),
+            ),
+            TextField(
+              controller: appNo,
+              decoration: const InputDecoration(labelText: 'Application number'),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Indicative only — confirm with the registrar.',
+              style: Theme.of(ctx).textTheme.labelSmall,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Check')),
+        ],
+      ),
+    );
+    if (submitted != true || !context.mounted) return;
+    try {
+      final dio = ref.read(dioProvider);
+      final res = await dio.post(
+        '/ipos/$ipoId/allotment-check',
+        data: {
+          'pan_last4': pan.text.trim().isEmpty ? null : pan.text.trim(),
+          'application_number':
+              appNo.text.trim().isEmpty ? null : appNo.text.trim(),
+        },
+      );
+      final data = unwrapData(res, (d) => Map<String, dynamic>.from(d as Map));
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text('Status: ${data['status']}'),
+            content: Text(
+              '${data['message']}${data['shares'] != null ? '\n\nShares: ${data['shares']}' : ''}',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
   }
 
   Widget _kv(BuildContext context, String k, String v) {
