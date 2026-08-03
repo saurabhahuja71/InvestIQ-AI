@@ -17,17 +17,24 @@ android {
     defaultConfig {
         // Must match Firebase Android app package name (CONFIGURATION_REQUIRED.md)
         applicationId = "ai.investiq.investiq_ai"
-        minSdk = flutter.minSdkVersion
+        // Firebase Auth / google_sign_in / flutter_secure_storage need 23+
+        minSdk = maxOf(flutter.minSdkVersion, 23)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        multiDexEnabled = true
     }
 
     buildTypes {
-        release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+        // Signed with the Android debug keystore (standard "debug APK").
+        getByName("debug") {
             signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = false
+        }
+        release {
+            // Local release builds can use debug signing until a Play keystore exists.
+            signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = false
         }
     }
 }
