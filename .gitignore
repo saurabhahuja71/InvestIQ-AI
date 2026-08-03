@@ -35,3 +35,6 @@ pgdata/
 # Coverage
 coverage/
 lcov.info
+
+# Exported container image tarballs
+dist/

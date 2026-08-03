@@ -296,3 +296,18 @@ flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8080
 ---
 
 *Keep this file updated when local run steps change.*
+
+---
+
+## Offline images (no docker.io)
+
+If Podman/Docker cannot pull from `docker.io`, use the GitHub Release image tarballs:
+
+See **[11-offline-container-images.md](11-offline-container-images.md)**.
+
+```bash
+mkdir -p dist/container-images
+gh release download container-images-v1 -D dist/container-images
+./scripts/load-container-images.sh dist/container-images
+./scripts/compose.sh up -d postgres redis
+```
