@@ -4,15 +4,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/storage/secure_storage.dart';
 import '../domain/user.dart';
+import 'google_auth_service.dart';
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
-  return AuthRepository(ref.watch(dioProvider), ref.watch(secureStorageProvider));
+  return AuthRepository(
+    ref.watch(dioProvider),
+    ref.watch(secureStorageProvider),
+    googleAuthService,
+  );
 });
 
 class AuthRepository {
-  AuthRepository(this._dio, this._storage);
+  AuthRepository(this._dio, this._storage, this._google);
   final Dio _dio;
   final SecureStorageService _storage;
+  final GoogleAuthService _google;
 
   Future<User> register({
     required String email,
@@ -31,6 +37,14 @@ class AuthRepository {
     final res = await _dio.post('/auth/login', data: {
       'email': email,
       'password': password,
+    });
+    return _persistAuth(res);
+  }
+
+  Future<User> loginWithGoogle() async {
+    final idToken = await _google.signInAndGetIdToken();
+    final res = await _dio.post('/auth/google', data: {
+      'id_token': idToken,
     });
     return _persistAuth(res);
   }
@@ -61,6 +75,9 @@ class AuthRepository {
       if (refresh != null) {
         await _dio.post('/auth/logout', data: {'refresh_token': refresh});
       }
+    } catch (_) {}
+    try {
+      await _google.signOut();
     } catch (_) {}
     await _storage.clear();
   }

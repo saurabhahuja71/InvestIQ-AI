@@ -53,3 +53,18 @@ final ipoDetailProvider =
     throw AppException.fromDio(e);
   }
 });
+
+/// Pull-to-refresh: ask API to re-sync from NSE, then reload lists.
+Future<void> refreshIpoFeed(WidgetRef ref, {String? status}) async {
+  final dio = ref.read(dioProvider);
+  try {
+    await dio.post('/ipos/sync');
+  } catch (_) {
+    // Non-fatal: still reload whatever is in DB.
+  }
+  ref.invalidate(ipoListProvider(status));
+  if (status != null) {
+    ref.invalidate(ipoListProvider(null));
+  }
+  ref.invalidate(openIposProvider);
+}

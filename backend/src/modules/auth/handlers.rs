@@ -17,6 +17,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/register", post(register))
         .route("/login", post(login))
+        .route("/google", post(google_auth))
         .route("/refresh", post(refresh))
         .route("/logout", post(logout))
         .route("/me", get(me).patch(update_me))
@@ -43,8 +44,8 @@ async fn register(
 
     let user = sqlx::query_as::<_, UserRow>(
         r#"
-        INSERT INTO users (email, password_hash, full_name)
-        VALUES ($1, $2, $3)
+        INSERT INTO users (email, password_hash, full_name, auth_provider)
+        VALUES ($1, $2, $3, 'password')
         RETURNING id, email, password_hash, full_name, preferred_currency,
                   preferred_locale, theme_preference, biometric_enabled,
                   email_verified, created_at
@@ -118,9 +119,145 @@ async fn login(
     .await?
     .ok_or_else(|| AppError::Unauthorized("invalid credentials".into()))?;
 
-    if !verify_password(&body.password, &user.password_hash)? {
+    let Some(hash) = user.password_hash.as_deref() else {
+        return Err(AppError::Unauthorized(
+            "this account uses Google Sign-In".into(),
+        ));
+    };
+
+    if !verify_password(&body.password, hash)? {
         return Err(AppError::Unauthorized("invalid credentials".into()));
     }
+
+    let tokens = issue_tokens(&state, &user).await?;
+    Ok(Json(ApiResponse::ok(tokens)))
+}
+
+async fn google_auth(
+    State(state): State<AppState>,
+    Json(body): Json<GoogleAuthRequest>,
+) -> AppResult<Json<ApiResponse<AuthResponse>>> {
+    if body.id_token.trim().is_empty() {
+        return Err(AppError::Validation("id_token is required".into()));
+    }
+    if !state.id_tokens().is_configured() {
+        return Err(AppError::Internal(
+            "Google Sign-In is not configured on the server. Set FIREBASE_PROJECT_ID and/or GOOGLE_CLIENT_IDS."
+                .into(),
+        ));
+    }
+
+    let identity = state.id_tokens().verify(body.id_token.trim()).await?;
+
+    // Prefer lookup by firebase_uid, then google_sub, then email.
+    let mut user: Option<UserRow> = None;
+
+    if let Some(uid) = identity.firebase_uid.as_ref() {
+        user = sqlx::query_as::<_, UserRow>(
+            r#"
+            SELECT id, email, password_hash, full_name, preferred_currency,
+                   preferred_locale, theme_preference, biometric_enabled,
+                   email_verified, created_at
+            FROM users WHERE firebase_uid = $1 AND status = 'active'
+            "#,
+        )
+        .bind(uid)
+        .fetch_optional(state.db())
+        .await?;
+    }
+
+    if user.is_none() {
+        if let Some(sub) = identity.google_sub.as_ref() {
+            user = sqlx::query_as::<_, UserRow>(
+                r#"
+                SELECT id, email, password_hash, full_name, preferred_currency,
+                       preferred_locale, theme_preference, biometric_enabled,
+                       email_verified, created_at
+                FROM users WHERE google_sub = $1 AND status = 'active'
+                "#,
+            )
+            .bind(sub)
+            .fetch_optional(state.db())
+            .await?;
+        }
+    }
+
+    if user.is_none() {
+        user = sqlx::query_as::<_, UserRow>(
+            r#"
+            SELECT id, email, password_hash, full_name, preferred_currency,
+                   preferred_locale, theme_preference, biometric_enabled,
+                   email_verified, created_at
+            FROM users WHERE email = $1 AND status = 'active'
+            "#,
+        )
+        .bind(&identity.email)
+        .fetch_optional(state.db())
+        .await?;
+    }
+
+    let user = if let Some(existing) = user {
+        sqlx::query_as::<_, UserRow>(
+            r#"
+            UPDATE users SET
+                google_sub = COALESCE($2, google_sub),
+                firebase_uid = COALESCE($3, firebase_uid),
+                full_name = COALESCE($4, full_name),
+                avatar_url = COALESCE($5, avatar_url),
+                email_verified = TRUE,
+                auth_provider = CASE
+                    WHEN password_hash IS NULL THEN 'google'
+                    ELSE auth_provider
+                END,
+                updated_at = NOW()
+            WHERE id = $1
+            RETURNING id, email, password_hash, full_name, preferred_currency,
+                      preferred_locale, theme_preference, biometric_enabled,
+                      email_verified, created_at
+            "#,
+        )
+        .bind(existing.id)
+        .bind(identity.google_sub.as_ref())
+        .bind(identity.firebase_uid.as_ref())
+        .bind(identity.name.as_ref())
+        .bind(identity.picture.as_ref())
+        .fetch_one(state.db())
+        .await?
+    } else {
+        let created = sqlx::query_as::<_, UserRow>(
+            r#"
+            INSERT INTO users (
+                email, password_hash, full_name, email_verified,
+                auth_provider, google_sub, firebase_uid, avatar_url
+            ) VALUES ($1, NULL, $2, TRUE, 'google', $3, $4, $5)
+            RETURNING id, email, password_hash, full_name, preferred_currency,
+                      preferred_locale, theme_preference, biometric_enabled,
+                      email_verified, created_at
+            "#,
+        )
+        .bind(&identity.email)
+        .bind(identity.name.as_ref())
+        .bind(identity.google_sub.as_ref())
+        .bind(identity.firebase_uid.as_ref())
+        .bind(identity.picture.as_ref())
+        .fetch_one(state.db())
+        .await
+        .map_err(|e| match e {
+            sqlx::Error::Database(db) if db.constraint().is_some() => {
+                AppError::Conflict("account already exists".into())
+            }
+            other => other.into(),
+        })?;
+
+        sqlx::query(
+            r#"INSERT INTO portfolios (user_id, name, is_default) VALUES ($1, 'Main', true)"#,
+        )
+        .bind(created.id)
+        .execute(state.db())
+        .await?;
+
+        created
+    };
 
     let tokens = issue_tokens(&state, &user).await?;
     Ok(Json(ApiResponse::ok(tokens)))
@@ -147,19 +284,27 @@ async fn issue_tokens(state: &AppState, user: &UserRow) -> AppResult<AuthRespons
     // jti reserved for future denylist
     let _ = jti;
 
+    let meta = sqlx::query_as::<_, (Option<String>, Option<String>)>(
+        r#"SELECT auth_provider, avatar_url FROM users WHERE id = $1"#,
+    )
+    .bind(user.id)
+    .fetch_optional(state.db())
+    .await?
+    .unwrap_or((None, None));
+
     Ok(AuthResponse {
-        user: PublicUser::from(UserRow {
+        user: PublicUser {
             id: user.id,
             email: user.email.clone(),
-            password_hash: String::new(),
             full_name: user.full_name.clone(),
             preferred_currency: user.preferred_currency.clone(),
             preferred_locale: user.preferred_locale.clone(),
             theme_preference: user.theme_preference.clone(),
             biometric_enabled: user.biometric_enabled,
             email_verified: user.email_verified,
-            created_at: user.created_at,
-        }),
+            auth_provider: meta.0,
+            avatar_url: meta.1,
+        },
         access_token: access,
         refresh_token: refresh,
         expires_in: state.jwt().access_ttl(),
@@ -242,7 +387,18 @@ async fn me(
     .fetch_one(state.db())
     .await?;
 
-    Ok(Json(ApiResponse::ok(row.into())))
+    let meta = sqlx::query_as::<_, (Option<String>, Option<String>)>(
+        r#"SELECT auth_provider, avatar_url FROM users WHERE id = $1"#,
+    )
+    .bind(user.user_id)
+    .fetch_one(state.db())
+    .await?;
+
+    let mut pub_user: PublicUser = row.into();
+    pub_user.auth_provider = meta.0;
+    pub_user.avatar_url = meta.1;
+
+    Ok(Json(ApiResponse::ok(pub_user)))
 }
 
 async fn update_me(
@@ -288,10 +444,17 @@ async fn change_password(
     body.validate()
         .map_err(|e| AppError::Validation(e.to_string()))?;
 
-    let hash: String = sqlx::query_scalar(r#"SELECT password_hash FROM users WHERE id = $1"#)
-        .bind(user.user_id)
-        .fetch_one(state.db())
-        .await?;
+    let hash: Option<String> =
+        sqlx::query_scalar(r#"SELECT password_hash FROM users WHERE id = $1"#)
+            .bind(user.user_id)
+            .fetch_one(state.db())
+            .await?;
+
+    let Some(hash) = hash else {
+        return Err(AppError::Validation(
+            "password not set; this account uses Google Sign-In".into(),
+        ));
+    };
 
     if !verify_password(&body.current_password, &hash)? {
         return Err(AppError::Unauthorized("current password is incorrect".into()));
@@ -411,10 +574,17 @@ async fn delete_account(
         ));
     }
 
-    let hash: String = sqlx::query_scalar(r#"SELECT password_hash FROM users WHERE id = $1"#)
-        .bind(user.user_id)
-        .fetch_one(state.db())
-        .await?;
+    let hash: Option<String> =
+        sqlx::query_scalar(r#"SELECT password_hash FROM users WHERE id = $1"#)
+            .bind(user.user_id)
+            .fetch_one(state.db())
+            .await?;
+
+    let Some(hash) = hash else {
+        return Err(AppError::Validation(
+            "password not set; re-authenticate with Google and contact support to delete, or use a password account".into(),
+        ));
+    };
 
     if !verify_password(&body.password, &hash)? {
         return Err(AppError::Unauthorized("password is incorrect".into()));

@@ -34,6 +34,15 @@ class _IpoListScreenState extends ConsumerState<IpoListScreen>
   String? _statusForIndex(int i) =>
       switch (i) { 0 => 'open', 1 => 'upcoming', 2 => 'closed', 3 => null, _ => null };
 
+  String _band(Map<String, dynamic> ipo) {
+    final low = ipo['price_band_low'];
+    final high = ipo['price_band_high'];
+    final issue = ipo['issue_price'];
+    if (issue != null) return '₹$issue';
+    if (low == null && high == null) return 'Not available';
+    return '₹${low ?? '—'}–${high ?? '—'}';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -109,7 +118,8 @@ class _IpoListScreenState extends ConsumerState<IpoListScreen>
                           .toList();
                     }
                     if (_tabs.index == 3) {
-                      filtered = filtered.where((e) => e['board'] == 'sme').toList();
+                      filtered =
+                          filtered.where((e) => e['board'] == 'sme').toList();
                     }
                     final q = _search.text.trim().toLowerCase();
                     if (q.isNotEmpty) {
@@ -117,21 +127,36 @@ class _IpoListScreenState extends ConsumerState<IpoListScreen>
                           .where((e) =>
                               (e['company_name']?.toString().toLowerCase() ?? '')
                                   .contains(q) ||
-                              (e['symbol']?.toString().toLowerCase() ?? '').contains(q))
+                              (e['symbol']?.toString().toLowerCase() ?? '')
+                                  .contains(q))
                           .toList();
                     }
                     if (filtered.isEmpty) {
-                      return const Center(child: Text('No IPOs found'));
+                      return RefreshIndicator(
+                        onRefresh: () => refreshIpoFeed(ref, status: status),
+                        child: ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: const [
+                            SizedBox(height: 120),
+                            Center(
+                              child: Text(
+                                'No IPOs from the exchange for this filter.\nPull to refresh.',
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
                     }
                     return RefreshIndicator(
-                      onRefresh: () async =>
-                          ref.invalidate(ipoListProvider(status)),
+                      onRefresh: () => refreshIpoFeed(ref, status: status),
                       child: ListView.separated(
                         padding: const EdgeInsets.all(16),
                         itemCount: filtered.length,
                         separatorBuilder: (_, __) => const SizedBox(height: 10),
                         itemBuilder: (context, i) {
                           final ipo = filtered[i];
+                          final sub = ipo['subscription_total'];
                           return GlassCard(
                             onTap: () => context.push('/ipos/${ipo['id']}'),
                             child: Column(
@@ -149,16 +174,36 @@ class _IpoListScreenState extends ConsumerState<IpoListScreen>
                                       ),
                                     ),
                                     Chip(
-                                      label: Text(ipo['status']?.toString() ?? ''),
+                                      label:
+                                          Text(ipo['status']?.toString() ?? ''),
                                       visualDensity: VisualDensity.compact,
                                     ),
                                   ],
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  '${ipo['board']} · Band ${ipo['price_band_low'] ?? '-'}–${ipo['price_band_high'] ?? '-'} · Lot ${ipo['lot_size'] ?? '-'}',
+                                  '${ipo['symbol'] ?? ''} · ${ipo['board']} · ${_band(ipo)}',
                                   style: Theme.of(context).textTheme.bodySmall,
                                 ),
+                                if (ipo['open_date'] != null ||
+                                    ipo['close_date'] != null) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Open ${ipo['open_date'] ?? '—'} · Close ${ipo['close_date'] ?? '—'}',
+                                    style:
+                                        Theme.of(context).textTheme.labelSmall,
+                                  ),
+                                ],
+                                if (sub != null) ...[
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'Subscription ${sub}x',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelMedium
+                                        ?.copyWith(fontWeight: FontWeight.w600),
+                                  ),
+                                ],
                                 if (ipo['gmp_value'] != null) ...[
                                   const SizedBox(height: 8),
                                   Container(
@@ -167,10 +212,12 @@ class _IpoListScreenState extends ConsumerState<IpoListScreen>
                                       vertical: 6,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: Colors.amber.withValues(alpha: 0.12),
+                                      color:
+                                          Colors.amber.withValues(alpha: 0.12),
                                       borderRadius: BorderRadius.circular(10),
                                       border: Border.all(
-                                        color: Colors.amber.withValues(alpha: 0.5),
+                                        color: Colors.amber
+                                            .withValues(alpha: 0.5),
                                       ),
                                     ),
                                     child: Text(
@@ -190,7 +237,23 @@ class _IpoListScreenState extends ConsumerState<IpoListScreen>
                     );
                   },
                   loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (e, _) => Center(child: Text('$e')),
+                  error: (e, _) => Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('$e', textAlign: TextAlign.center),
+                          const SizedBox(height: 12),
+                          FilledButton(
+                            onPressed: () =>
+                                refreshIpoFeed(ref, status: status),
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 );
               },
             ),

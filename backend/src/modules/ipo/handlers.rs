@@ -13,11 +13,24 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", get(list_ipos))
         .route("/calendar", get(calendar))
+        .route("/sync", post(sync_ipos_handler))
         .route("/watchlist", get(watchlist))
         .route("/{id}", get(get_ipo))
         .route("/{id}/watch", post(add_watch).delete(remove_watch))
         .route("/{id}/ai-summary", get(ai_summary))
         .route("/{id}/allotment-check", post(allotment_check))
+}
+
+async fn sync_ipos_handler(
+    State(state): State<AppState>,
+) -> AppResult<Json<ApiResponse<serde_json::Value>>> {
+    let mut redis = state.redis.clone();
+    let count =
+        crate::infra::nse_ipo::sync_ipos(state.db(), &mut redis, state.nse()).await?;
+    Ok(Json(ApiResponse::ok(serde_json::json!({
+        "synced": count,
+        "source": "nse",
+    }))))
 }
 
 async fn list_ipos(
@@ -101,6 +114,7 @@ async fn get_ipo(
         SELECT i.id, i.company_id, c.name AS company_name, c.symbol, c.sector, c.description,
                c.logo_url, i.board::text, i.status::text, i.issue_type,
                i.price_band_low, i.price_band_high, i.issue_price, i.lot_size, i.issue_size_cr,
+               i.shares_offered,
                i.open_date, i.close_date, i.allotment_date, i.refund_date, i.listing_date,
                i.exchange, i.registrar,
                i.subscription_total, i.subscription_retail, i.subscription_qib, i.subscription_nii,
@@ -140,6 +154,7 @@ async fn get_ipo(
             issue_price: row.issue_price,
             lot_size: row.lot_size,
             issue_size_cr: row.issue_size_cr,
+            shares_offered: row.shares_offered,
             open_date: row.open_date,
             close_date: row.close_date,
             allotment_date: row.allotment_date,
@@ -240,6 +255,7 @@ async fn ai_summary(
         SELECT i.id, i.company_id, c.name AS company_name, c.symbol, c.sector, c.description,
                c.logo_url, i.board::text, i.status::text, i.issue_type,
                i.price_band_low, i.price_band_high, i.issue_price, i.lot_size, i.issue_size_cr,
+               i.shares_offered,
                i.open_date, i.close_date, i.allotment_date, i.refund_date, i.listing_date,
                i.exchange, i.registrar,
                i.subscription_total, i.subscription_retail, i.subscription_qib, i.subscription_nii,

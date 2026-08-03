@@ -16,6 +16,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _password = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _loading = false;
+  bool _googleLoading = false;
   bool _obscure = true;
 
   @override
@@ -45,9 +46,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  Future<void> _google() async {
+    setState(() => _googleLoading = true);
+    try {
+      await ref.read(authControllerProvider.notifier).loginWithGoogle();
+      if (mounted) context.go('/');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _googleLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final busy = _loading || _googleLoading;
 
     return Scaffold(
       body: SafeArea(
@@ -78,7 +96,40 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             color: scheme.onSurfaceVariant,
                           ),
                     ),
-                    const SizedBox(height: 36),
+                    const SizedBox(height: 32),
+                    FilledButton.icon(
+                      onPressed: busy ? null : _google,
+                      icon: _googleLoading
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.g_mobiledata_rounded, size: 28),
+                      label: Text(
+                        _googleLoading ? 'Connecting…' : 'Continue with Google',
+                      ),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        const Expanded(child: Divider()),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Text(
+                            'or email',
+                            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                          ),
+                        ),
+                        const Expanded(child: Divider()),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
                     TextFormField(
                       controller: _email,
                       keyboardType: TextInputType.emailAddress,
@@ -105,19 +156,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           v != null && v.length >= 8 ? null : 'Min 8 characters',
                     ),
                     const SizedBox(height: 24),
-                    FilledButton(
-                      onPressed: _loading ? null : _submit,
+                    FilledButton.tonal(
+                      onPressed: busy ? null : _submit,
                       child: _loading
                           ? const SizedBox(
                               height: 20,
                               width: 20,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Text('Sign in'),
+                          : const Text('Sign in with email'),
                     ),
                     const SizedBox(height: 12),
                     TextButton(
-                      onPressed: () => context.push('/register'),
+                      onPressed: busy ? null : () => context.push('/register'),
                       child: const Text('Create account'),
                     ),
                     const SizedBox(height: 24),

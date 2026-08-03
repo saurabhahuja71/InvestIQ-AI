@@ -44,6 +44,28 @@ async fn main() -> anyhow::Result<()> {
         .await
         .map_err(|e| anyhow::anyhow!("migration failed: {e}"))?;
 
+    // Initial + periodic NSE IPO sync (non-fatal on failure)
+    {
+        let sync_state = state.clone();
+        let interval_secs = config.ipo_sync_interval_secs.max(60);
+        tokio::spawn(async move {
+            loop {
+                let mut redis = sync_state.redis.clone();
+                match crate::infra::nse_ipo::sync_ipos(
+                    sync_state.db(),
+                    &mut redis,
+                    sync_state.nse(),
+                )
+                .await
+                {
+                    Ok(n) => tracing::info!(synced = n, "ipo sync tick"),
+                    Err(e) => tracing::error!(error = %e, "ipo sync tick failed"),
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(interval_secs)).await;
+            }
+        });
+    }
+
     let cors = build_cors(&config)?;
 
     let app = build_router(state)

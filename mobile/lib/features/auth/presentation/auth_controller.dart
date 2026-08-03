@@ -81,6 +81,19 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
+  Future<void> loginWithGoogle() async {
+    try {
+      final user = await _repo.loginWithGoogle();
+      state = AuthState(status: AuthStatus.authenticated, user: user);
+    } catch (e) {
+      state = state.copyWith(
+        status: AuthStatus.unauthenticated,
+        error: e.toString(),
+      );
+      rethrow;
+    }
+  }
+
   Future<void> logout() async {
     await _repo.logout();
     state = const AuthState(status: AuthStatus.unauthenticated);

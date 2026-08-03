@@ -72,6 +72,9 @@ Edit `.env` as needed:
 | `REDIS_URL` | `redis://127.0.0.1:6379` |
 | `AI_API_KEY` | Optional; leave empty for local educational AI |
 | `CORS_ORIGINS` | `*` is OK in development only |
+| `FIREBASE_PROJECT_ID` | Required for Google Sign-In (Firebase project ID) |
+| `GOOGLE_CLIENT_IDS` | Comma-separated OAuth client IDs (Web + Android) for ID token audience |
+| `IPO_SYNC_INTERVAL_SECS` | NSE pull interval (default `900`) |
 
 ---
 
@@ -160,8 +163,19 @@ flutter pub get
 ### Chrome (easiest without Android SDK)
 
 ```bash
-flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8080
+flutter run -d chrome \
+  --dart-define=API_BASE_URL=http://127.0.0.1:8080 \
+  --dart-define=FIREBASE_API_KEY=YOUR_KEY \
+  --dart-define=FIREBASE_APP_ID=YOUR_APP_ID \
+  --dart-define=FIREBASE_MESSAGING_SENDER_ID=YOUR_SENDER \
+  --dart-define=FIREBASE_PROJECT_ID=YOUR_PROJECT \
+  --dart-define=FIREBASE_AUTH_DOMAIN=YOUR_PROJECT.firebaseapp.com \
+  --dart-define=GOOGLE_WEB_CLIENT_ID=YOUR_WEB_CLIENT_ID.apps.googleusercontent.com
 ```
+
+Email/password still works without Firebase. **Continue with Google** requires the dart-defines above **and** matching backend `FIREBASE_PROJECT_ID` / `GOOGLE_CLIENT_IDS`.
+
+**IPO feed:** API syncs from NSE on startup and every `IPO_SYNC_INTERVAL_SECS`. Manual: `curl -X POST http://127.0.0.1:8080/api/v1/ipos/sync`.
 
 ### Android emulator
 

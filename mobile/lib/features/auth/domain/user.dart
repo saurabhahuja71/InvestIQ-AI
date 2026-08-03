@@ -6,6 +6,8 @@ class User {
     this.preferredCurrency = 'INR',
     this.themePreference = 'system',
     this.biometricEnabled = false,
+    this.authProvider,
+    this.avatarUrl,
   });
 
   final String id;
@@ -14,6 +16,8 @@ class User {
   final String preferredCurrency;
   final String themePreference;
   final bool biometricEnabled;
+  final String? authProvider;
+  final String? avatarUrl;
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
@@ -23,6 +27,8 @@ class User {
       preferredCurrency: json['preferred_currency'] as String? ?? 'INR',
       themePreference: json['theme_preference'] as String? ?? 'system',
       biometricEnabled: json['biometric_enabled'] as bool? ?? false,
+      authProvider: json['auth_provider'] as String?,
+      avatarUrl: json['avatar_url'] as String?,
     );
   }
 }

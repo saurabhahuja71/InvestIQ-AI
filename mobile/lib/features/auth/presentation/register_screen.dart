@@ -17,6 +17,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _password = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _loading = false;
+  bool _googleLoading = false;
 
   @override
   void dispose() {
@@ -45,8 +46,23 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
   }
 
+  Future<void> _google() async {
+    setState(() => _googleLoading = true);
+    try {
+      await ref.read(authControllerProvider.notifier).loginWithGoogle();
+      if (mounted) context.go('/');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _googleLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final busy = _loading || _googleLoading;
     return Scaffold(
       appBar: AppBar(title: const Text('Create account')),
       body: SafeArea(
@@ -56,6 +72,36 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             key: _formKey,
             child: Column(
               children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: busy ? null : _google,
+                    icon: _googleLoading
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.g_mobiledata_rounded, size: 28),
+                    label: Text(
+                      _googleLoading
+                          ? 'Connecting…'
+                          : 'Sign up with Google',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Row(
+                  children: [
+                    Expanded(child: Divider()),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      child: Text('or email'),
+                    ),
+                    Expanded(child: Divider()),
+                  ],
+                ),
+                const SizedBox(height: 20),
                 TextFormField(
                   controller: _name,
                   decoration: const InputDecoration(
@@ -88,8 +134,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity,
-                  child: FilledButton(
-                    onPressed: _loading ? null : _submit,
+                  child: FilledButton.tonal(
+                    onPressed: busy ? null : _submit,
                     child: Text(_loading ? 'Creating…' : 'Create account'),
                   ),
                 ),

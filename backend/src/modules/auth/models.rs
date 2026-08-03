@@ -48,11 +48,16 @@ pub struct DeleteAccountRequest {
     pub confirm: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct GoogleAuthRequest {
+    pub id_token: String,
+}
+
 #[derive(Debug, Serialize, FromRow)]
 pub struct UserRow {
     pub id: Uuid,
     pub email: String,
-    pub password_hash: String,
+    pub password_hash: Option<String>,
     pub full_name: Option<String>,
     pub preferred_currency: String,
     pub preferred_locale: String,
@@ -72,6 +77,8 @@ pub struct PublicUser {
     pub theme_preference: String,
     pub biometric_enabled: bool,
     pub email_verified: bool,
+    pub auth_provider: Option<String>,
+    pub avatar_url: Option<String>,
 }
 
 impl From<UserRow> for PublicUser {
@@ -85,6 +92,8 @@ impl From<UserRow> for PublicUser {
             theme_preference: u.theme_preference,
             biometric_enabled: u.biometric_enabled,
             email_verified: u.email_verified,
+            auth_provider: None,
+            avatar_url: None,
         }
     }
 }

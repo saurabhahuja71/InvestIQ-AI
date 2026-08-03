@@ -7,7 +7,9 @@ use sqlx::PgPool;
 use crate::config::Config;
 use crate::infra::ai::AiClient;
 use crate::infra::crypto::AesCipher;
+use crate::infra::id_token::IdTokenVerifier;
 use crate::infra::jwt::JwtService;
+use crate::infra::nse_ipo::NseIpoClient;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -22,6 +24,8 @@ pub struct AppStateInner {
     pub ai: AiClient,
     /// Optional field-level encryption when `AES_KEY_BASE64` is configured.
     pub cipher: Option<AesCipher>,
+    pub id_tokens: IdTokenVerifier,
+    pub nse: NseIpoClient,
 }
 
 impl AppState {
@@ -51,6 +55,14 @@ impl AppState {
             _ => None,
         };
 
+        let id_tokens = IdTokenVerifier::new(
+            config.firebase_project_id.clone(),
+            config.google_client_ids.clone(),
+        )
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+
+        let nse = NseIpoClient::new().map_err(|e| anyhow::anyhow!("{e}"))?;
+
         Ok(Self {
             inner: Arc::new(AppStateInner {
                 db,
@@ -59,6 +71,8 @@ impl AppState {
                 jwt,
                 ai,
                 cipher,
+                id_tokens,
+                nse,
             }),
         })
     }
@@ -81,6 +95,14 @@ impl AppState {
 
     pub fn cipher(&self) -> Option<&AesCipher> {
         self.inner.cipher.as_ref()
+    }
+
+    pub fn id_tokens(&self) -> &IdTokenVerifier {
+        &self.inner.id_tokens
+    }
+
+    pub fn nse(&self) -> &NseIpoClient {
+        &self.inner.nse
     }
 }
 

@@ -16,6 +16,9 @@ pub struct Config {
     pub rate_limit_rps: u32,
     pub cors_origins: Vec<String>,
     pub app_env: String,
+    pub firebase_project_id: Option<String>,
+    pub google_client_ids: Vec<String>,
+    pub ipo_sync_interval_secs: u64,
 }
 
 impl Config {
@@ -71,6 +74,20 @@ impl Config {
                 .unwrap_or(30),
             cors_origins,
             app_env,
+            firebase_project_id: env::var("FIREBASE_PROJECT_ID")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty()),
+            google_client_ids: env::var("GOOGLE_CLIENT_IDS")
+                .unwrap_or_default()
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect(),
+            ipo_sync_interval_secs: env::var("IPO_SYNC_INTERVAL_SECS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(900),
         })
     }
 
