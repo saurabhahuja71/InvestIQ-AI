@@ -23,6 +23,13 @@ mobile/.idea/
 !.env.example
 *.pem
 
+# Firebase / Google (real values — never invent; see CONFIGURATION_REQUIRED.md)
+mobile/config/firebase.dart-define.json
+mobile/android/app/google-services.json
+!mobile/config/*.example
+!mobile/android/app/google-services.json.example
+
+
 # IDE
 .idea/
 .vscode/

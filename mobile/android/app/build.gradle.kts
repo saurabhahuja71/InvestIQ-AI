@@ -15,10 +15,8 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
+        // Must match Firebase Android app package name (CONFIGURATION_REQUIRED.md)
         applicationId = "ai.investiq.investiq_ai"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -42,4 +40,12 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+// Google Services (Firebase) — only when the real google-services.json is present.
+// Download from Firebase Console → Android app → place at android/app/google-services.json
+// See CONFIGURATION_REQUIRED.md and google-services.json.example
+val googleServicesFile = file("google-services.json")
+if (googleServicesFile.exists()) {
+    apply(plugin = "com.google.gms.google-services")
 }

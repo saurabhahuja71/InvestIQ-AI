@@ -18,12 +18,31 @@ pub fn router() -> Router<AppState> {
         .route("/register", post(register))
         .route("/login", post(login))
         .route("/google", post(google_auth))
+        .route("/providers", get(auth_providers))
         .route("/refresh", post(refresh))
         .route("/logout", post(logout))
         .route("/me", get(me).patch(update_me))
         .route("/change-password", post(change_password))
         .route("/export", post(export_data))
         .route("/account", axum::routing::delete(delete_account))
+}
+
+/// Public: which auth methods the server is configured for.
+async fn auth_providers(
+    State(state): State<AppState>,
+) -> AppResult<Json<ApiResponse<serde_json::Value>>> {
+    let google = state.id_tokens().is_configured();
+    Ok(Json(ApiResponse::ok(serde_json::json!({
+        "password": true,
+        "google": google,
+        "google_hint": if google {
+            serde_json::Value::Null
+        } else {
+            serde_json::json!(
+                "Set FIREBASE_PROJECT_ID and/or GOOGLE_CLIENT_IDS in .env (see CONFIGURATION_REQUIRED.md)"
+            )
+        },
+    }))))
 }
 
 fn token_hash(token: &str) -> String {
@@ -141,8 +160,8 @@ async fn google_auth(
         return Err(AppError::Validation("id_token is required".into()));
     }
     if !state.id_tokens().is_configured() {
-        return Err(AppError::Internal(
-            "Google Sign-In is not configured on the server. Set FIREBASE_PROJECT_ID and/or GOOGLE_CLIENT_IDS."
+        return Err(AppError::BadRequest(
+            "Google Sign-In is not configured on the server. Set FIREBASE_PROJECT_ID and/or GOOGLE_CLIENT_IDS in .env, then restart the API. See CONFIGURATION_REQUIRED.md."
                 .into(),
         ));
     }

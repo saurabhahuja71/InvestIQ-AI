@@ -8,8 +8,15 @@ final secureStorageProvider = Provider<SecureStorageService>((ref) {
 });
 
 class SecureStorageService {
+  /// Platform-appropriate secure storage (Keychain / EncryptedSharedPreferences /
+  /// web local storage via flutter_secure_storage).
   final FlutterSecureStorage _storage = const FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+    webOptions: WebOptions(
+      dbName: 'investiq_secure',
+      publicKey: 'investiq_auth',
+    ),
   );
 
   Future<void> saveTokens({

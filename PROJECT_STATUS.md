@@ -191,6 +191,7 @@ Other modules (portfolio, journal, AI) remain as before — not the focus of thi
 | 2026-08-03 | Added **docs/10-local-run.md** (full local run guide) and linked from README |
 | 2026-08-03 | **Milestone 1:** Google/Firebase auth (`POST /auth/google`), NSE real IPO sync, seed removal, Flutter Google button + IPO UX |
 | 2026-08-03 | **Offline images:** exported Postgres 16 + Redis 7 Alpine to GitHub Release `container-images-v1`; load/export scripts + docs |
+| 2026-08-03 | **Google Auth complete (code):** FlutterFire + Android/Web scaffolding, `GET /auth/providers`, `CONFIGURATION_REQUIRED.md`; blocked only on operator Firebase secrets |
 
 ---
 

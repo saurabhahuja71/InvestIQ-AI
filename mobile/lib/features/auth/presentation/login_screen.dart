@@ -113,6 +113,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         minimumSize: const Size.fromHeight(48),
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Requires Firebase config — see CONFIGURATION_REQUIRED.md',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                    ),
                     const SizedBox(height: 20),
                     Row(
                       children: [

@@ -55,6 +55,23 @@ InvestIQ-AI/
 7. [Podman + dnf setup](docs/09-podman-dnf-setup.md)
 8. **[Run locally (full guide)](docs/10-local-run.md)** ← start here for day-to-day dev
 9. **[Offline container images (no docker.io)](docs/11-offline-container-images.md)** ← second laptop / blocked registry
+10. **[Google / Firebase Auth setup](CONFIGURATION_REQUIRED.md)** ← required for Continue with Google
+
+---
+
+## Notes — Google Sign-In
+
+Code for Google Authentication is **fully implemented** (Flutter Firebase Auth → `POST /api/v1/auth/google` → JWT → Postgres → secure storage).
+
+**You must create a Firebase project and paste real IDs** — nothing is hardcoded:
+
+1. Follow **[CONFIGURATION_REQUIRED.md](CONFIGURATION_REQUIRED.md)**
+2. Fill `InvestIQ-AI/.env` (`FIREBASE_PROJECT_ID`, `GOOGLE_CLIENT_IDS`)
+3. Copy `mobile/config/firebase.dart-define.json.example` → `firebase.dart-define.json` and fill values
+4. Restart API + run: `./scripts/run-mobile-chrome.sh`
+5. Check: `./scripts/check-auth-config.sh` and `curl -s http://127.0.0.1:8080/api/v1/auth/providers`
+
+Until then, email/password login works; Google shows a clear configuration error.
 
 ---
 
