@@ -175,3 +175,8 @@ podman exec -it investiq-ai_postgres_1 \
 
 - [CONFIGURATION_REQUIRED.md](../CONFIGURATION_REQUIRED.md)  
 - [Offline container images](11-offline-container-images.md) (other laptop)  
+
+## Task completion status
+
+See [14-android-task-status.md](14-android-task-status.md).
+

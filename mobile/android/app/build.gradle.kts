@@ -1,5 +1,6 @@
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -7,7 +8,8 @@ plugins {
 android {
     namespace = "ai.investiq.investiq_ai"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    // Match Firebase / google_sign_in plugin requirement (backward compatible)
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -30,11 +32,13 @@ android {
         getByName("debug") {
             signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = false
+            isShrinkResources = false
         }
-        release {
+        getByName("release") {
             // Local release builds can use debug signing until a Play keystore exists.
             signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }
