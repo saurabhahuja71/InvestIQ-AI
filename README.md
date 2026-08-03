@@ -1,1 +1,159 @@
-# InvestIQ-AI
+# InvestIQ AI
+
+Cross-platform fintech app built **MVP-first** so you can reach the Play Store and App Store faster.
+
+## Product strategy: four modules only (MVP)
+
+| MVP (ship first) | Later (do not block launch) |
+|------------------|-----------------------------|
+| **IPO Tracker** | Broker integrations |
+| **Portfolio Tracker** (manual) | Advanced analytics (deep XIRR/risk/rebalance) |
+| **AI Chat** (educational + disclaimers) | Premium / subscriptions |
+| **Trading Journal** (manual) | Live prices, push matrix, news, multi-currency |
+
+Full phased plan: **[docs/05-roadmap.md](docs/05-roadmap.md)**.  
+**Session dashboard (start here every time):** **[PROJECT_STATUS.md](PROJECT_STATUS.md)**.
+
+| Layer | Stack |
+|-------|--------|
+| Mobile | Flutter (Material 3), Riverpod, go_router |
+| API | Rust + Axum, JWT, Argon2 |
+| Data | PostgreSQL 16, Redis 7 |
+| Ops | Docker Compose, GitHub Actions |
+
+---
+
+## Repository layout
+
+```
+InvestIQ-AI/
+├── docs/                 # Architecture, schema, API, wireframes, roadmap, deploy
+├── backend/              # Rust Axum API
+│   ├── migrations/       # SQL migrations + seed IPOs
+│   └── src/modules/      # auth, ipo, portfolio, journal, ai
+├── mobile/               # Flutter application
+├── docker-compose.yml
+├── .github/workflows/ci.yml
+└── .env.example
+```
+
+---
+
+## Documentation index
+
+1. [Architecture](docs/01-architecture.md)
+2. [Database schema](docs/02-database-schema.md)
+3. [API design](docs/03-api-design.md)
+4. [Navigation & wireframes](docs/04-navigation-and-wireframes.md)
+5. [Roadmap MVP → production](docs/05-roadmap.md)
+6. [Deployment](docs/06-deployment.md)
+
+---
+
+## Quick start
+
+### 1. Backend (API)
+
+```bash
+cp .env.example .env
+docker compose up -d postgres redis
+cd backend
+cargo run
+# listens on http://0.0.0.0:8080
+curl http://localhost:8080/health
+```
+
+Or full stack:
+
+```bash
+docker compose up --build
+```
+
+### 2. Mobile (Flutter)
+
+```bash
+cd mobile
+flutter create . --project-name investiq_ai   # generate android/ios once
+flutter pub get
+# Android emulator → host machine API:
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8080
+# iOS simulator:
+flutter run --dart-define=API_BASE_URL=http://127.0.0.1:8080
+```
+
+---
+
+## MVP modules (implemented skeleton)
+
+Scaffold exists for all four. Harden these before any “Phase 2” work.
+
+### 1. IPO Tracker
+- List/filter by status & board (mainboard / SME)
+- Detail: issue band, lot, dates, subscription
+- **GMP always marked unofficial** with disclaimer
+- Watchlist (allotment = stub / deep-link only for MVP)
+
+### 2. Portfolio Tracker
+- Manual holdings: stock, ETF, MF, gold, bond, cash
+- Transactions + dashboard value + simple allocation chart
+- Basic return display (advanced XIRR UI can stay secondary)
+
+### 3. AI Chat
+- Chat UI with persistent **investment disclaimer**
+- No guaranteed returns in system prompt
+- Works with educational stub if `AI_API_KEY` is unset
+
+### 4. Trading Journal
+- Manual trade entry (side, strategy, R:R, emotions, notes)
+- Basic stats: win rate, avg win/loss, largest winner/loser
+- Defer broker import and heavy AI “mistake coach” to post-launch
+
+### Auth & security
+- Register / login / refresh / logout
+- Argon2id passwords, JWT access + rotating refresh (hashed in DB)
+- Secure token storage on device
+- AES-256-GCM helper for field encryption
+- HTTPS + rate limiting planned at edge (Compose-ready)
+
+---
+
+## Authentication flow
+
+```
+Register/Login → access_token (short) + refresh_token (long)
+API calls: Authorization: Bearer <access>
+401 → POST /auth/refresh → new pair (old refresh revoked)
+Logout → revoke refresh
+```
+
+---
+
+## State management
+
+- **Riverpod** `StateNotifier` / `FutureProvider` for auth, IPO, portfolio, journal
+- **go_router** shell navigation (5 tabs)
+- **flutter_secure_storage** for tokens
+- **Hive** cache box initialized for offline (expand per feature)
+
+---
+
+## CI/CD
+
+GitHub Actions (`.github/workflows/ci.yml`):
+- Backend: `fmt`, `clippy`, `test` with Postgres + Redis services
+- Mobile: `flutter analyze` + `flutter test`
+- Docker image build for API
+
+---
+
+## Important disclaimers
+
+- **Not financial advice.** InvestIQ AI does not provide guaranteed returns.
+- **Grey Market Premium is unofficial** and not endorsed by exchanges or regulators.
+- Always do your own research.
+
+---
+
+## License
+
+Proprietary — all rights reserved.

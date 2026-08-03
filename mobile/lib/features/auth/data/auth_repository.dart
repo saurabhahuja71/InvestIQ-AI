@@ -1,0 +1,72 @@
+import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/network/api_client.dart';
+import '../../../core/storage/secure_storage.dart';
+import '../domain/user.dart';
+
+final authRepositoryProvider = Provider<AuthRepository>((ref) {
+  return AuthRepository(ref.watch(dioProvider), ref.watch(secureStorageProvider));
+});
+
+class AuthRepository {
+  AuthRepository(this._dio, this._storage);
+  final Dio _dio;
+  final SecureStorageService _storage;
+
+  Future<User> register({
+    required String email,
+    required String password,
+    String? fullName,
+  }) async {
+    final res = await _dio.post('/auth/register', data: {
+      'email': email,
+      'password': password,
+      'full_name': fullName,
+    });
+    return _persistAuth(res);
+  }
+
+  Future<User> login({required String email, required String password}) async {
+    final res = await _dio.post('/auth/login', data: {
+      'email': email,
+      'password': password,
+    });
+    return _persistAuth(res);
+  }
+
+  Future<User> _persistAuth(Response res) async {
+    final data = unwrapData(res, (d) => d as Map<String, dynamic>);
+    await _storage.saveTokens(
+      access: data['access_token'] as String,
+      refresh: data['refresh_token'] as String,
+    );
+    return User.fromJson(data['user'] as Map<String, dynamic>);
+  }
+
+  Future<User?> me() async {
+    final token = await _storage.getAccessToken();
+    if (token == null) return null;
+    try {
+      final res = await _dio.get('/auth/me');
+      return unwrapData(res, (d) => User.fromJson(d as Map<String, dynamic>));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> logout() async {
+    final refresh = await _storage.getRefreshToken();
+    try {
+      if (refresh != null) {
+        await _dio.post('/auth/logout', data: {'refresh_token': refresh});
+      }
+    } catch (_) {}
+    await _storage.clear();
+  }
+
+  Future<bool> hasSession() async {
+    final t = await _storage.getAccessToken();
+    return t != null && t.isNotEmpty;
+  }
+}
