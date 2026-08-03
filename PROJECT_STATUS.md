@@ -190,14 +190,27 @@ Other modules (portfolio, journal, AI) remain as before — not the focus of thi
 | 2026-08-03 | Switched local ops docs/scripts to **Podman Compose** + **dnf** install helpers |
 | 2026-08-03 | Added **docs/10-local-run.md** (full local run guide) and linked from README |
 | 2026-08-03 | **Milestone 1:** Google/Firebase auth (`POST /auth/google`), NSE real IPO sync, seed removal, Flutter Google button + IPO UX |
+| 2026-08-03 | **Offline images:** exported Postgres 16 + Redis 7 Alpine to GitHub Release `container-images-v1`; load/export scripts + docs |
 
 ---
 
 ## 12. How to test this build
 
-**Canonical guide:** [docs/10-local-run.md](docs/10-local-run.md)
+**Canonical guide:** [docs/10-local-run.md](docs/10-local-run.md)  
+**No docker.io:** [docs/11-offline-container-images.md](docs/11-offline-container-images.md)
 
-### Infra + API
+### Notes — container images on GitHub
+
+| Note | Detail |
+|------|--------|
+| Why | Second laptop / environments cannot pull from `docker.io` |
+| What | `postgres:16-alpine` + `redis:7-alpine` saved as gzipped `podman save` tarballs |
+| Where | GitHub Release **[container-images-v1](https://github.com/saurabhahuja71/InvestIQ-AI/releases/tag/container-images-v1)** (not in git history) |
+| Assets | `postgres-16-alpine.tar.gz`, `redis-7-alpine.tar.gz` |
+| Load | `./scripts/load-container-images.sh dist/container-images` |
+| Re-export | `./scripts/export-container-images.sh` then upload a new release if tags change |
+
+### Infra + API (normal path — docker.io OK)
 
 ```bash
 cd InvestIQ-AI && cp -n .env.example .env
@@ -207,6 +220,15 @@ cd backend && cargo run
 # curl http://127.0.0.1:8080/health
 # curl -X POST http://127.0.0.1:8080/api/v1/ipos/sync
 # curl 'http://127.0.0.1:8080/api/v1/ipos?status=open&per_page=5'
+```
+
+### Infra when docker.io is blocked
+
+```bash
+mkdir -p dist/container-images
+gh release download container-images-v1 -D dist/container-images
+./scripts/load-container-images.sh dist/container-images
+./scripts/compose.sh up -d postgres redis
 ```
 
 ### Flutter (Chrome)
