@@ -54,6 +54,33 @@ InvestIQ-AI/
 6. [Deployment](docs/06-deployment.md)
 7. [Podman + dnf setup](docs/09-podman-dnf-setup.md)
 8. **[Run locally (full guide)](docs/10-local-run.md)** ← start here for day-to-day dev
+9. **[Offline container images (no docker.io)](docs/11-offline-container-images.md)** ← second laptop / blocked registry
+
+---
+
+## Notes — offline Postgres & Redis images
+
+Compose needs `postgres:16-alpine` and `redis:7-alpine`. Those images are **exported and published on GitHub Releases** (not in git) so a machine that **cannot reach docker.io** can still start the stack.
+
+| Item | Value |
+|------|--------|
+| Release | [`container-images-v1`](https://github.com/saurabhahuja71/InvestIQ-AI/releases/tag/container-images-v1) |
+| Assets | `postgres-16-alpine.tar.gz` (~118 MB), `redis-7-alpine.tar.gz` (~17 MB) |
+| Load | `./scripts/load-container-images.sh dist/container-images` |
+| Re-export | `./scripts/export-container-images.sh` (host that *can* pull docker.io) |
+
+**Second laptop / no docker.io:**
+
+```bash
+git clone git@github.com:saurabhahuja71/InvestIQ-AI.git && cd InvestIQ-AI
+mkdir -p dist/container-images
+gh release download container-images-v1 -D dist/container-images
+# Or download the two .tar.gz files from the Releases page
+./scripts/load-container-images.sh dist/container-images
+./scripts/compose.sh up -d postgres redis
+```
+
+Full write-up: [docs/11-offline-container-images.md](docs/11-offline-container-images.md).
 
 ---
 
@@ -68,6 +95,7 @@ InvestIQ-AI/
 ./scripts/install-deps-dnf.sh
 
 cp -n .env.example .env
+# If docker.io is blocked, load images from the GitHub Release first (see Notes above)
 ./scripts/compose.sh up -d postgres redis   # Podman: Postgres + Redis
 
 # Terminal 1 — API
