@@ -359,3 +359,11 @@ curl -s -X POST http://127.0.0.1:8080/api/v1/auth/google \
 - Scripts: `check-auth-config.sh`, `run-mobile-chrome.sh`
 
 **Blocker for “fully functional Google login” on any machine:** completing Steps 1–5 (and 6 for Android) with **your** Firebase project values.
+
+---
+
+## GitHub Secrets (CI / shared machine)
+
+Firebase values for this project are also stored as **GitHub Actions secrets** (names only documented; values are not readable later).
+
+See **[docs/13-github-secrets.md](docs/13-github-secrets.md)**.
