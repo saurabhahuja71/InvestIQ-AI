@@ -11,6 +11,59 @@ Email/password auth continues to work without Firebase.
 
 ---
 
+## CRITICAL: `firebase_auth/configuration-not-found`
+
+### Diagnosis (verified for project `investiq-ai-a514e`)
+
+Your **Web app client config is present** (apiKey, appId, projectId, authDomain, etc.).  
+Calling Google’s Identity Toolkit with that apiKey returns:
+
+```text
+CONFIGURATION_NOT_FOUND
+```
+
+even for basic Auth APIs (`getProjectConfig`, email sign-up, Google `createAuthUri`).
+
+That means:
+
+| Layer | Status |
+|-------|--------|
+| Flutter dart-defines / `firebase_options` | OK (values loaded) |
+| Backend `FIREBASE_PROJECT_ID` | OK for JWT verify once tokens exist |
+| **Firebase Authentication product** | **NOT ENABLED** for the project |
+| **Google sign-in provider** | **Cannot work until Auth is enabled** |
+
+This is **not** fixed by re-running `npm install firebase` or by changing `firebase_options.dart`.  
+It is fixed **only in the Firebase Console**.
+
+### Exact fix (do this now)
+
+1. Open:  
+   **https://console.firebase.google.com/project/investiq-ai-a514e/authentication**
+2. If you see **Get started**, click it (enables Firebase Authentication).
+3. Go to **Sign-in method**.
+4. Click **Google** → turn **Enable** ON.
+5. Choose a **Project support email** → **Save**.
+6. Open **Settings** (gear under Authentication) → **Authorized domains**.
+   - Ensure `localhost` is listed (default).
+7. Wait ~30 seconds, then **hot restart** Flutter (full restart, not just hot reload).
+8. Tap **Continue with Google** again.
+
+### How to confirm Auth is enabled (optional)
+
+```bash
+# Should NOT return CONFIGURATION_NOT_FOUND after you enable Authentication
+curl -s "https://www.googleapis.com/identitytoolkit/v3/relyingparty/getProjectConfig?key=YOUR_WEB_API_KEY"
+```
+
+After Auth is enabled, a successful response includes project config JSON (authorized domains, etc.).
+
+### What the app does now
+
+On startup and before Google sign-in, InvestIQ probes Identity Toolkit and shows a **precise** message if Auth is not enabled, instead of only the raw `configuration-not-found` code.
+
+---
+
 ## Architecture (what the code already does)
 
 ```
@@ -69,6 +122,8 @@ No secret is copied in this step; enabling the provider is required.
 | `projectId` | `FIREBASE_PROJECT_ID` |
 | `messagingSenderId` | `FIREBASE_MESSAGING_SENDER_ID` |
 | `appId` | `FIREBASE_APP_ID` (Web app ID) |
+| `storageBucket` | `FIREBASE_STORAGE_BUCKET` (optional but recommended) |
+| `measurementId` | `FIREBASE_MEASUREMENT_ID` (optional; Analytics only) |
 
 4. **Authorized domains** (Authentication → Settings → Authorized domains):
    - `localhost` (default)

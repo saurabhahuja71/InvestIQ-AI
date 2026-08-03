@@ -53,8 +53,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (mounted) context.go('/');
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
+        final msg = e.toString().replaceFirst('Bad state: ', '');
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Google Sign-In'),
+            content: SingleChildScrollView(child: Text(msg)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
         );
       }
     } finally {

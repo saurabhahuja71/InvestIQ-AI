@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import '../../../core/auth/firebase_config_validator.dart';
 import '../../../firebase_options.dart';
 
 /// Google Sign-In via Firebase Auth.
@@ -11,8 +12,8 @@ import '../../../firebase_options.dart';
 class GoogleAuthService {
   bool _firebaseReady = false;
   bool _googleReady = false;
+  FirebaseConfigReport? lastReport;
 
-  /// Whether compile-time Firebase options are present.
   bool get isConfigured => DefaultFirebaseOptions.isConfigured;
 
   Future<void> ensureInitialized() async {
@@ -28,7 +29,6 @@ class GoogleAuthService {
       _firebaseReady = true;
     }
     if (!_googleReady && !kIsWeb) {
-      // serverClientId MUST be the Web OAuth client ID so Google returns an idToken.
       final webClientId = DefaultFirebaseOptions.googleWebClientId;
       await GoogleSignIn.instance.initialize(
         clientId: webClientId.isEmpty ? null : webClientId,
@@ -38,13 +38,43 @@ class GoogleAuthService {
     }
   }
 
+  /// Runs compile-time + live Auth project checks (safe to call often).
+  Future<FirebaseConfigReport> validateConfiguration() async {
+    try {
+      await ensureInitialized();
+    } catch (_) {
+      // Still probe network with apiKey if present.
+    }
+    final report = await FirebaseConfigValidator.validate(probeNetwork: true);
+    lastReport = report;
+    return report;
+  }
+
   Future<String> signInAndGetIdToken() async {
     await ensureInitialized();
 
-    if (kIsWeb) {
-      return _signInWebFirebasePopup();
+    final report = await FirebaseConfigValidator.validate(probeNetwork: true);
+    lastReport = report;
+    if (report.authProjectConfigured == false) {
+      throw StateError(report.userFacingSummary);
     }
-    return _signInMobileGoogleThenFirebase();
+
+    try {
+      if (kIsWeb) {
+        return await _signInWebFirebasePopup();
+      }
+      return await _signInMobileGoogleThenFirebase();
+    } on FirebaseAuthException catch (e) {
+      throw StateError(
+        FirebaseConfigValidator.mapAuthException(e),
+      );
+    } catch (e) {
+      final mapped = FirebaseConfigValidator.mapAuthException(e);
+      if (mapped != e.toString()) {
+        throw StateError(mapped);
+      }
+      rethrow;
+    }
   }
 
   Future<String> _signInWebFirebasePopup() async {
@@ -66,6 +96,16 @@ class GoogleAuthService {
       );
     }
 
+    if (DefaultFirebaseOptions.googleWebClientId.isEmpty) {
+      throw StateError(
+        'GOOGLE_WEB_CLIENT_ID is required on Android/iOS.\n'
+        'Google Cloud Console → APIs & Services → Credentials → '
+        'OAuth 2.0 Web client → Client ID.\n'
+        'Place in firebase.dart-define.json as GOOGLE_WEB_CLIENT_ID.\n'
+        'See CONFIGURATION_REQUIRED.md',
+      );
+    }
+
     final GoogleSignInAccount account =
         await GoogleSignIn.instance.authenticate(
       scopeHint: const ['email', 'profile'],
@@ -76,7 +116,7 @@ class GoogleAuthService {
       throw StateError(
         'Google did not return an ID token. '
         'Set GOOGLE_WEB_CLIENT_ID to your Web OAuth client ID '
-        '(used as serverClientId). See CONFIGURATION_REQUIRED.md.',
+        '(serverClientId). See CONFIGURATION_REQUIRED.md.',
       );
     }
 
@@ -99,10 +139,8 @@ class GoogleAuthService {
 
   Future<void> signOut() async {
     try {
-      if (DefaultFirebaseOptions.isConfigured) {
-        if (Firebase.apps.isNotEmpty) {
-          await FirebaseAuth.instance.signOut();
-        }
+      if (DefaultFirebaseOptions.isConfigured && Firebase.apps.isNotEmpty) {
+        await FirebaseAuth.instance.signOut();
       }
     } catch (_) {}
     try {

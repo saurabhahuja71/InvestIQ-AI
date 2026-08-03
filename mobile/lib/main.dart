@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+import 'core/auth/firebase_config_validator.dart';
 import 'core/offline/sync_service.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
@@ -23,14 +24,25 @@ Future<void> main() async {
           options: DefaultFirebaseOptions.currentPlatform,
         );
       }
+      if (kDebugMode) {
+        debugPrint(
+          'Firebase.initializeApp OK project=${DefaultFirebaseOptions.projectId} '
+          'appId=${DefaultFirebaseOptions.appId}',
+        );
+        // Live probe: surfaces configuration-not-found before the user taps Google.
+        final report = await FirebaseConfigValidator.validate();
+        debugPrint('Firebase Auth ready=${report.readyForGoogleSignIn}');
+        if (!report.readyForGoogleSignIn) {
+          debugPrint(report.userFacingSummary);
+        }
+      }
     } catch (e, st) {
       debugPrint('Firebase.initializeApp failed: $e\n$st');
     }
   } else if (kDebugMode) {
+    debugPrint(DefaultFirebaseOptions.configurationHelp);
     debugPrint(
-      'Firebase not configured at compile time. '
-      'Google Sign-In disabled until dart-defines are set. '
-      'See CONFIGURATION_REQUIRED.md',
+      'Compile-time presence: ${FirebaseConfigValidator.compileTimePresence()}',
     );
   }
 
