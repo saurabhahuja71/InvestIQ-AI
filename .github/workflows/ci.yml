@@ -51,8 +51,14 @@ jobs:
         env:
           DATABASE_URL: postgres://investiq:investiq@localhost:5432/investiq
           REDIS_URL: redis://127.0.0.1:6379
-          JWT_SECRET: ci-test-secret-key-not-for-production!!
-        run: cargo test
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          GOOGLE_CLIENT_IDS: ${{ secrets.GOOGLE_CLIENT_IDS }}
+        run: |
+          if [ -z "$JWT_SECRET" ]; then
+            export JWT_SECRET='ci-test-secret-key-not-for-production!!'
+          fi
+          cargo test
 
   mobile:
     name: Mobile (Flutter)
@@ -63,6 +69,28 @@ jobs:
         with:
           channel: stable
           cache: true
+      - name: Write Firebase dart-defines from secrets
+        env:
+          FIREBASE_CONFIG_JSON: ${{ secrets.FIREBASE_CONFIG_JSON }}
+        run: |
+          if [ -n "$FIREBASE_CONFIG_JSON" ]; then
+            printf '%s\n' "$FIREBASE_CONFIG_JSON" > mobile/config/firebase.dart-define.json
+            echo "Wrote mobile/config/firebase.dart-define.json from FIREBASE_CONFIG_JSON"
+          else
+            echo "FIREBASE_CONFIG_JSON not set — analyze/test without live Firebase defines"
+            cp mobile/config/firebase.dart-define.json.example \
+              mobile/config/firebase.dart-define.json
+          fi
+      - name: Write google-services.json from secrets
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s\n' "$GOOGLE_SERVICES_JSON" > mobile/android/app/google-services.json
+            echo "Wrote mobile/android/app/google-services.json from GOOGLE_SERVICES_JSON"
+          else
+            echo "GOOGLE_SERVICES_JSON not set — skip Android google-services file"
+          fi
       - name: Pub get
         working-directory: mobile
         run: flutter pub get
@@ -72,6 +100,18 @@ jobs:
       - name: Test
         working-directory: mobile
         run: flutter test
+      - name: Debug APK when Firebase config is real
+        working-directory: mobile
+        env:
+          API_BASE_URL: http://127.0.0.1:8080
+        run: |
+          if grep -q 'REPLACE_WITH' config/firebase.dart-define.json 2>/dev/null; then
+            echo "Placeholder Firebase config — skip APK build"
+            exit 0
+          fi
+          flutter build apk --debug \
+            --dart-define=API_BASE_URL=$API_BASE_URL \
+            --dart-define-from-file=config/firebase.dart-define.json
 
   docker:
     name: Docker build
