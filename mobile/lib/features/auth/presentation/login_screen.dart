@@ -48,16 +48,46 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _google() async {
     setState(() => _googleLoading = true);
+    // ignore: avoid_print
+    print('InvestIQ-Auth: LoginScreen Continue with Google tapped');
     try {
       await ref.read(authControllerProvider.notifier).loginWithGoogle();
       if (mounted) context.go('/');
-    } catch (e) {
+    } catch (e, st) {
+      // ignore: avoid_print
+      print('InvestIQ-Auth: LoginScreen Google error: $e\n$st');
       if (mounted) {
         final msg = e.toString().replaceFirst('Bad state: ', '');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              msg.length > 120 ? '${msg.substring(0, 120)}…' : msg,
+            ),
+            duration: const Duration(seconds: 8),
+            action: SnackBarAction(
+              label: 'Details',
+              onPressed: () {
+                showDialog<void>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Google Sign-In'),
+                    content: SingleChildScrollView(child: Text(msg)),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('OK'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        );
         await showDialog<void>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('Google Sign-In'),
+            title: const Text('Google Sign-In failed'),
             content: SingleChildScrollView(child: Text(msg)),
             actions: [
               TextButton(
@@ -123,14 +153,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       style: FilledButton.styleFrom(
                         minimumSize: const Size.fromHeight(48),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Requires Firebase config — see CONFIGURATION_REQUIRED.md',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
                     ),
                     const SizedBox(height: 20),
                     Row(

@@ -3,14 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../constants/app_constants.dart';
 import '../storage/secure_storage.dart';
+import 'api_base.dart';
 import 'api_exception.dart';
 
 final dioProvider = Provider<Dio>((ref) {
   final storage = ref.watch(secureStorageProvider);
   final dio = Dio(
     BaseOptions(
+      // Placeholder; updated to a live origin before each request.
       baseUrl: '${AppConstants.apiBaseUrl}/api/v1',
-      connectTimeout: const Duration(seconds: 20),
+      connectTimeout: const Duration(seconds: 15),
       receiveTimeout: const Duration(seconds: 30),
       headers: {
         'Content-Type': 'application/json',
@@ -23,13 +25,41 @@ final dioProvider = Provider<Dio>((ref) {
   dio.interceptors.add(
     InterceptorsWrapper(
       onRequest: (options, handler) async {
+        try {
+          final base = await ApiBase.resolve();
+          options.baseUrl = '$base/api/v1';
+          dio.options.baseUrl = options.baseUrl;
+        } catch (_) {}
         final token = await storage.getAccessToken();
         if (token != null && token.isNotEmpty) {
           options.headers['Authorization'] = 'Bearer $token';
         }
+        // ignore: avoid_print
+        print('InvestIQ-API: ${options.method} ${options.baseUrl}${options.path}');
         handler.next(options);
       },
       onError: (error, handler) async {
+        // On connection failure, re-resolve API base and retry once.
+        final isConn = error.type == DioExceptionType.connectionError ||
+            error.type == DioExceptionType.connectionTimeout ||
+            error.type == DioExceptionType.unknown;
+        if (isConn && error.requestOptions.extra['api_retry'] != true) {
+          try {
+            ApiBase.reset();
+            final base = await ApiBase.resolve(force: true);
+            final req = error.requestOptions;
+            req.baseUrl = '$base/api/v1';
+            req.extra['api_retry'] = true;
+            dio.options.baseUrl = req.baseUrl;
+            // ignore: avoid_print
+            print('InvestIQ-API: retry after re-resolve → $base');
+            final clone = await dio.fetch(req);
+            return handler.resolve(clone);
+          } catch (_) {
+            // fall through to normal error mapping
+          }
+        }
+
         if (error.response?.statusCode == 401) {
           final refreshed = await _tryRefresh(dio, storage);
           if (refreshed) {

@@ -6,12 +6,29 @@ export PATH="${HOME}/development/flutter/bin:${HOME}/Android/Sdk/platform-tools:
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}"
 export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
 
-# Device cannot use 127.0.0.1 for host API — default to primary LAN IP.
-DEFAULT_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
-API_HOST="${API_HOST:-${DEFAULT_IP:-10.0.2.2}}"
-API_BASE_URL="${API_BASE_URL:-http://${API_HOST}:8080}"
+# API base URL for the phone (LAN by default — open host firewall TCP 8080 once):
+#   ./scripts/open-api-firewall.sh
+# Overrides:
+#   API_BASE_URL=http://192.168.x.x:8080
+#   USE_ADB_REVERSE=1  → http://127.0.0.1:8080 + adb reverse (USB)
 DEFINE_FILE="${DEFINE_FILE:-$ROOT/mobile/config/firebase.dart-define.json}"
 OUT_DIR="$ROOT/dist/android"
+
+DEFAULT_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+API_HOST="${API_HOST:-${DEFAULT_IP:-10.0.2.2}}"
+
+if [[ -z "${API_BASE_URL:-}" ]]; then
+  if [[ "${USE_ADB_REVERSE:-}" == "1" ]]; then
+    API_BASE_URL="http://127.0.0.1:8080"
+  else
+    API_BASE_URL="http://${API_HOST}:8080"
+  fi
+fi
+
+# Always include common local fallbacks unless caller sets API_FALLBACK_BASE_URLS
+if [[ -z "${API_FALLBACK_BASE_URLS:-}" ]]; then
+  API_FALLBACK_BASE_URLS="http://127.0.0.1:8080,http://${API_HOST}:8080,http://10.0.2.2:8080"
+fi
 
 cd "$ROOT/mobile"
 
@@ -29,10 +46,20 @@ keytool -list -v \
   -alias androiddebugkey -storepass android -keypass android 2>/dev/null \
   | grep 'SHA1:' || true
 
+# Optional comma-separated fallbacks (tunnel, LAN, reverse, etc.)
+API_FALLBACK_BASE_URLS="${API_FALLBACK_BASE_URLS:-}"
+
 flutter pub get
-flutter build apk --debug \
-  --dart-define="API_BASE_URL=${API_BASE_URL}" \
+FLUTTER_ARGS=(
+  build apk --debug
+  --dart-define="API_BASE_URL=${API_BASE_URL}"
   --dart-define-from-file="$DEFINE_FILE"
+)
+if [[ -n "$API_FALLBACK_BASE_URLS" ]]; then
+  FLUTTER_ARGS+=(--dart-define="API_FALLBACK_BASE_URLS=${API_FALLBACK_BASE_URLS}")
+  echo "API_FALLBACK_BASE_URLS=$API_FALLBACK_BASE_URLS"
+fi
+flutter "${FLUTTER_ARGS[@]}"
 
 mkdir -p "$OUT_DIR"
 APK_SRC="$ROOT/mobile/build/app/outputs/flutter-apk/app-debug.apk"
@@ -43,6 +70,14 @@ ls -lh "$APK_SRC" "$APK_DST"
 echo
 echo "Installed APK path: $APK_DST"
 echo "Install on device: adb install -r $APK_DST"
-echo "Ensure phone and PC share the same Wi‑Fi and API listens on 0.0.0.0:8080"
+if [[ "${USE_ADB_REVERSE:-}" == "1" ]] || [[ "$API_BASE_URL" == *"127.0.0.1"* ]]; then
+  if command -v adb >/dev/null 2>&1; then
+    adb reverse tcp:8080 tcp:8080 || true
+    echo "adb reverse tcp:8080 → host :8080 (keep USB connected)"
+  fi
+  echo "API via USB reverse: $API_BASE_URL"
+else
+  echo "API via LAN: $API_BASE_URL (open host firewall TCP 8080 if needed)"
+fi
 echo "Firebase Android: package ai.investiq.investiq_ai + debug SHA-1 + google-services.json"
 echo "See docs/12-android-run.md"

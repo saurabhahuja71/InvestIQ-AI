@@ -15,12 +15,31 @@ class AppException implements Exception {
     if (error is DioException) {
       if (error.type == DioExceptionType.connectionError ||
           error.type == DioExceptionType.connectionTimeout ||
-          error.type == DioExceptionType.unknown) {
+          error.type == DioExceptionType.receiveTimeout ||
+          error.type == DioExceptionType.sendTimeout) {
+        final base = error.requestOptions.baseUrl;
         return AppException(
-          'No network connection. Showing cached data when available.',
+          'Cannot reach InvestIQ server ($base). '
+          'Check Wi‑Fi, keep the phone USB-connected for local dev, '
+          'and ensure the API is running on the PC.',
           offline: true,
           statusCode: error.response?.statusCode,
         );
+      }
+      if (error.type == DioExceptionType.unknown) {
+        final msg = error.message ?? error.error?.toString() ?? '';
+        if (msg.contains('SocketException') ||
+            msg.contains('Connection') ||
+            msg.contains('Failed host lookup') ||
+            msg.contains('Network is unreachable')) {
+          final base = error.requestOptions.baseUrl;
+          return AppException(
+            'Cannot reach InvestIQ server ($base). '
+            'Check Wi‑Fi and that the API is running on the PC.',
+            offline: true,
+            statusCode: error.response?.statusCode,
+          );
+        }
       }
       final data = error.response?.data;
       if (data is Map && data['error'] is Map) {

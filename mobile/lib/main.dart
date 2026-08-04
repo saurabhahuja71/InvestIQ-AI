@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import 'core/auth/firebase_config_validator.dart';
+import 'core/network/api_base.dart';
 import 'core/offline/sync_service.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
@@ -15,6 +16,11 @@ import 'firebase_options.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Pick a reachable API origin early (tunnel / adb reverse / LAN).
+  try {
+    await ApiBase.resolve().timeout(const Duration(seconds: 12));
+  } catch (_) {}
 
   // Firebase is optional until CONFIGURATION_REQUIRED.md values are provided.
   if (DefaultFirebaseOptions.isConfigured) {

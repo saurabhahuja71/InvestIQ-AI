@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 
 import '../../firebase_options.dart';
@@ -229,8 +230,74 @@ class FirebaseConfigValidator {
     return null;
   }
 
+  /// Android Credential Manager often reports config errors as "canceled"
+  /// right after the user picks an account.
+  static const String androidSignInHelp = '''
+Google Sign-In failed after account selection.
+
+Common fixes (do all of these):
+
+1) Firebase Android SHA fingerprints
+   Project settings → Android app (ai.investiq.investiq_ai)
+   SHA-1:  AC:4E:85:AB:10:45:54:96:A7:26:D2:69:D7:70:1A:25:FB:2D:9E:F4
+   SHA-256: BE:5C:92:47:BF:64:20:49:F2:F3:D5:96:87:7E:D5:31:30:12:69:98:4D:17:30:AF:E9:A3:F8:B1:95:88:B2:DC
+   Re-download google-services.json after adding.
+
+2) Google Cloud OAuth consent screen (most common after SHA is fixed)
+   https://console.cloud.google.com/apis/credentials/consent?project=investiq-ai-a514e
+   • If User type is Testing: add YOUR Google email under Test users
+   • Or publish the app to Production
+   Without this, the account picker closes with no login.
+
+3) Support email set on the consent screen / Firebase Google provider.
+
+4) Rebuild APK after google-services.json change:
+   ./scripts/build-android-debug-apk.sh && adb install -r dist/android/investiq-ai-debug.apk
+
+Details: docs/12-android-run.md
+''';
+
+  /// Maps [GoogleSignInException] to actionable text.
+  static String mapGoogleSignInException(GoogleSignInException e) {
+    final detail = [
+      if (e.description != null && e.description!.isNotEmpty) e.description,
+      if (e.details != null) e.details.toString(),
+    ].whereType<String>().join(' | ');
+
+    switch (e.code) {
+      case GoogleSignInExceptionCode.canceled:
+        // True user cancel OR (very common) misconfigured SHA / consent screen.
+        if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+          return '${androidSignInHelp.trim()}'
+              '${detail.isEmpty ? '' : '\n\nSDK detail: $detail'}';
+        }
+        return 'Google sign-in was canceled.';
+      case GoogleSignInExceptionCode.clientConfigurationError:
+      case GoogleSignInExceptionCode.providerConfigurationError:
+        if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+          return '${androidSignInHelp.trim()}'
+              '${detail.isEmpty ? '' : '\n\nSDK detail: $detail'}';
+        }
+        return 'Google Sign-In client is misconfigured.\n'
+            'Set GOOGLE_WEB_CLIENT_ID (Web OAuth client) and verify '
+            'Firebase Android package + SHA fingerprints.\n'
+            'See CONFIGURATION_REQUIRED.md'
+            '${detail.isEmpty ? '' : '\n\nSDK detail: $detail'}';
+      case GoogleSignInExceptionCode.interrupted:
+        return 'Google sign-in was interrupted. Try again.';
+      case GoogleSignInExceptionCode.uiUnavailable:
+        return 'Google sign-in UI is unavailable on this device.';
+      default:
+        return 'Google sign-in failed (${e.code.name}): '
+            '${detail.isEmpty ? e.toString() : detail}';
+    }
+  }
+
   /// Maps FirebaseAuthException codes to actionable text.
   static String mapAuthException(Object error) {
+    if (error is GoogleSignInException) {
+      return mapGoogleSignInException(error);
+    }
     final s = error.toString();
     if (s.contains('configuration-not-found') ||
         s.contains('CONFIGURATION_NOT_FOUND')) {
@@ -253,6 +320,32 @@ class FirebaseConfigValidator {
     if (s.contains('popup-closed-by-user') ||
         s.contains('popup-blocked')) {
       return 'Google sign-in popup was closed or blocked. Allow popups and try again.';
+    }
+    // Firebase signInWithProvider → Chrome Custom Tabs OAuth state loss
+    if (s.contains('missing initial state') ||
+        s.contains('initial_state') ||
+        s.contains('INVALID_STATE')) {
+      return 'Google browser sign-in lost its session (missing initial state).\n'
+          'This build uses native Google Sign-In instead of Chrome.\n'
+          'Force-stop the app, reopen, and try Continue with Google again.\n'
+          'If Chrome still opens, reinstall the latest APK.';
+    }
+    // ApiException: 10 / DEVELOPER_ERROR (legacy Play Services path)
+    if (s.contains('ApiException: 10') ||
+        s.contains('DEVELOPER_ERROR') ||
+        s.contains('CommonStatusCodes.DEVELOPER_ERROR')) {
+      return androidSignInHelp.trim();
+    }
+    if (s.contains('network') ||
+        s.contains('SocketException') ||
+        s.contains('Failed host lookup') ||
+        s.contains('Connection refused')) {
+      return 'Cannot reach the InvestIQ API after Google sign-in.\n'
+          'Phone and PC must be on the same Wi‑Fi. '
+          'API default: ${DefaultFirebaseOptions.projectId.isEmpty ? "see API_BASE_URL" : "http://<PC-LAN-IP>:8080"}.\n'
+          'Start backend: ./scripts/dev.sh\n'
+          'Or: adb reverse tcp:8080 tcp:8080 with API_BASE_URL=http://127.0.0.1:8080\n\n'
+          'Detail: $s';
     }
     return s;
   }

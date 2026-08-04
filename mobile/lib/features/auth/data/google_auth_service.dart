@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
@@ -6,9 +8,25 @@ import 'package:google_sign_in/google_sign_in.dart';
 import '../../../core/auth/firebase_config_validator.dart';
 import '../../../firebase_options.dart';
 
-/// Google Sign-In via Firebase Auth.
+void _log(String message) {
+  // Always print so `adb logcat | grep InvestIQ-Auth` shows steps.
+  // ignore: avoid_print
+  print('InvestIQ-Auth: $message');
+  if (kDebugMode) {
+    debugPrint('InvestIQ-Auth: $message');
+  }
+}
+
+/// Google Sign-In for InvestIQ.
 ///
-/// Returns a **Firebase ID token** for `POST /api/v1/auth/google`.
+/// **Android/iOS:** uses the native `google_sign_in` Credential Manager sheet
+/// (no Chrome / Custom Tabs). That avoids Firebase `signInWithProvider`
+/// failures like "missing initial state in chrome".
+///
+/// **Web:** Firebase popup.
+///
+/// Returns a Firebase ID token when possible, otherwise the raw Google ID
+/// token for `POST /api/v1/auth/google`.
 class GoogleAuthService {
   bool _firebaseReady = false;
   bool _googleReady = false;
@@ -27,24 +45,30 @@ class GoogleAuthService {
         );
       }
       _firebaseReady = true;
+      _log(
+        'Firebase ready project=${DefaultFirebaseOptions.projectId} '
+        'androidAppId=${DefaultFirebaseOptions.androidAppId}',
+      );
     }
     if (!_googleReady && !kIsWeb) {
       final webClientId = DefaultFirebaseOptions.googleWebClientId;
+      // Android/iOS: only serverClientId (Web OAuth client) for ID tokens.
+      // Do NOT pass the web client as clientId — that can force a bad flow.
       await GoogleSignIn.instance.initialize(
-        clientId: webClientId.isEmpty ? null : webClientId,
         serverClientId: webClientId.isEmpty ? null : webClientId,
       );
       _googleReady = true;
+      _log(
+        'GoogleSignIn initialized serverClientId='
+        '${webClientId.isEmpty ? "(empty)" : "${webClientId.substring(0, 24)}…"}',
+      );
     }
   }
 
-  /// Runs compile-time + live Auth project checks (safe to call often).
   Future<FirebaseConfigReport> validateConfiguration() async {
     try {
       await ensureInitialized();
-    } catch (_) {
-      // Still probe network with apiKey if present.
-    }
+    } catch (_) {}
     final report = await FirebaseConfigValidator.validate(probeNetwork: true);
     lastReport = report;
     return report;
@@ -52,23 +76,45 @@ class GoogleAuthService {
 
   Future<String> signInAndGetIdToken() async {
     await ensureInitialized();
+    _log('signInAndGetIdToken start (native google_sign_in on mobile)');
 
-    final report = await FirebaseConfigValidator.validate(probeNetwork: true);
-    lastReport = report;
-    if (report.authProjectConfigured == false) {
-      throw StateError(report.userFacingSummary);
-    }
+    unawaited(() async {
+      try {
+        final report = await FirebaseConfigValidator.validate(probeNetwork: true)
+            .timeout(const Duration(seconds: 5));
+        lastReport = report;
+        _log(
+          'config probe authConfigured=${report.authProjectConfigured} '
+          'ready=${report.readyForGoogleSignIn}',
+        );
+      } catch (e) {
+        _log('config probe skipped/failed: $e');
+      }
+    }());
 
     try {
       if (kIsWeb) {
         return await _signInWebFirebasePopup();
       }
-      return await _signInMobileGoogleThenFirebase();
-    } on FirebaseAuthException catch (e) {
-      throw StateError(
-        FirebaseConfigValidator.mapAuthException(e),
+      // Mobile: never use Firebase signInWithProvider — it opens Chrome and
+      // often fails with "missing initial state".
+      return await _signInWithGoogleSignInPackage().timeout(
+        const Duration(seconds: 120),
+        onTimeout: () {
+          throw StateError(
+            'Google sign-in timed out after 2 minutes.\n'
+            'Check network, Google Play Services, and try again.',
+          );
+        },
       );
-    } catch (e) {
+    } on GoogleSignInException catch (e) {
+      _log('GoogleSignInException code=${e.code} desc=${e.description}');
+      throw StateError(FirebaseConfigValidator.mapGoogleSignInException(e));
+    } on FirebaseAuthException catch (e) {
+      _log('FirebaseAuthException code=${e.code} message=${e.message}');
+      throw StateError(FirebaseConfigValidator.mapAuthException(e));
+    } catch (e, st) {
+      _log('signIn error: $e\n$st');
       final mapped = FirebaseConfigValidator.mapAuthException(e);
       if (mapped != e.toString()) {
         throw StateError(mapped);
@@ -88,7 +134,9 @@ class GoogleAuthService {
     return _firebaseIdToken(userCred.user);
   }
 
-  Future<String> _signInMobileGoogleThenFirebase() async {
+  Future<String> _signInWithGoogleSignInPackage() async {
+    _log('native google_sign_in.authenticate (no browser)');
+
     if (!GoogleSignIn.instance.supportsAuthenticate()) {
       throw StateError(
         'Google interactive sign-in is not supported on this platform. '
@@ -106,24 +154,53 @@ class GoogleAuthService {
       );
     }
 
-    final GoogleSignInAccount account =
-        await GoogleSignIn.instance.authenticate(
-      scopeHint: const ['email', 'profile'],
-    );
+    // Clear stale sessions that can cause silent cancel after account pick.
+    try {
+      await GoogleSignIn.instance.signOut();
+      _log('signed out previous Google session');
+    } catch (e) {
+      _log('signOut before auth ignored: $e');
+    }
+
+    final GoogleSignInAccount account;
+    try {
+      // No scopeHint: keep auth separate from authorization (recommended).
+      account = await GoogleSignIn.instance.authenticate();
+    } on GoogleSignInException catch (e) {
+      _log(
+        'authenticate failed: code=${e.code.name} desc=${e.description} '
+        'details=${e.details}',
+      );
+      rethrow;
+    }
+
+    _log('Google account=${account.email} id=${account.id}');
 
     final String? googleIdToken = account.authentication.idToken;
     if (googleIdToken == null || googleIdToken.isEmpty) {
       throw StateError(
-        'Google did not return an ID token. '
+        'Google did not return an ID token.\n'
         'Set GOOGLE_WEB_CLIENT_ID to your Web OAuth client ID '
         '(serverClientId). See CONFIGURATION_REQUIRED.md.',
       );
     }
+    _log('Got Google idToken length=${googleIdToken.length}');
 
-    final credential = GoogleAuthProvider.credential(idToken: googleIdToken);
-    final userCred =
-        await FirebaseAuth.instance.signInWithCredential(credential);
-    return _firebaseIdToken(userCred.user);
+    // Exchange for Firebase ID token when possible (backend FIREBASE_PROJECT_ID).
+    try {
+      final credential = GoogleAuthProvider.credential(idToken: googleIdToken);
+      final userCred =
+          await FirebaseAuth.instance.signInWithCredential(credential);
+      final token = await _firebaseIdToken(userCred.user);
+      _log('Firebase signInWithCredential success');
+      return token;
+    } on FirebaseAuthException catch (e) {
+      _log(
+        'Firebase signInWithCredential failed: ${e.code} ${e.message} — '
+        'using raw Google idToken for backend (GOOGLE_CLIENT_IDS)',
+      );
+      return googleIdToken;
+    }
   }
 
   Future<String> _firebaseIdToken(User? user) async {

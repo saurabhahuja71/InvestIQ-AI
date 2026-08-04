@@ -117,7 +117,21 @@ set -a && source ../.env && set +a
 cargo run
 ```
 
-5. Phone and PC on **same Wi‑Fi**. Firewall must allow **TCP 8080**.  
+5. Phone and PC on **same Wi‑Fi**. Open host firewall for the API **once** (permanent):
+
+```bash
+# Allows TCP 8080 through firewalld/ufw/iptables (needs sudo password)
+./scripts/open-api-firewall.sh
+```
+
+Verify from the PC:
+
+```bash
+curl -s "http://$(hostname -I | awk '{print $1}'):8080/health"
+```
+
+The phone must also reach that LAN IP (not blocked by AP client isolation).  
+USB alternative without firewall: `USE_ADB_REVERSE=1 ./scripts/build-android-debug-apk.sh` and keep `adb reverse tcp:8080 tcp:8080`.  
 6. APK is built with `API_BASE_URL=http://<PC_LAN_IP>:8080` by the build script.
 
 Check which URL was baked in by rebuilding after setting:
