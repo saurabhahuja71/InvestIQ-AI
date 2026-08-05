@@ -9,7 +9,7 @@ use crate::infra::ai::AiClient;
 use crate::infra::crypto::AesCipher;
 use crate::infra::id_token::IdTokenVerifier;
 use crate::infra::jwt::JwtService;
-use crate::infra::nse_ipo::NseIpoClient;
+use crate::modules::ipo::IpoSyncService;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -25,7 +25,7 @@ pub struct AppStateInner {
     /// Optional field-level encryption when `AES_KEY_BASE64` is configured.
     pub cipher: Option<AesCipher>,
     pub id_tokens: IdTokenVerifier,
-    pub nse: NseIpoClient,
+    pub ipo_sync: IpoSyncService,
 }
 
 impl AppState {
@@ -61,7 +61,7 @@ impl AppState {
         )
         .map_err(|e| anyhow::anyhow!("{e}"))?;
 
-        let nse = NseIpoClient::new().map_err(|e| anyhow::anyhow!("{e}"))?;
+        let ipo_sync = IpoSyncService::new(db.clone(), redis.clone())?;
 
         Ok(Self {
             inner: Arc::new(AppStateInner {
@@ -72,7 +72,7 @@ impl AppState {
                 ai,
                 cipher,
                 id_tokens,
-                nse,
+                ipo_sync,
             }),
         })
     }
@@ -101,8 +101,8 @@ impl AppState {
         &self.inner.id_tokens
     }
 
-    pub fn nse(&self) -> &NseIpoClient {
-        &self.inner.nse
+    pub fn ipo_sync(&self) -> &IpoSyncService {
+        &self.inner.ipo_sync
     }
 }
 

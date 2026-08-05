@@ -62,6 +62,7 @@ Response: `{ user, access_token, refresh_token, expires_in }`
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/ipos` | List/filter/search |
+| POST | `/ipos/sync` | Force NSE → Postgres sync |
 | GET | `/ipos/calendar` | Calendar range |
 | GET | `/ipos/:id` | Detail + financials + GMP |
 | GET | `/ipos/:id/ai-summary` | Cached AI DRHP summary |
@@ -76,10 +77,12 @@ Response: `{ user, access_token, refresh_token, expires_in }`
 - `q`: search
 - `from`, `to`: dates
 - `page`, `per_page`
+- `refresh`: `true` to sync from NSE before listing (best-effort)
 - `sort`: open_date|close_date|gmp|subscription
 
 ### IPO detail notes
-- `gmp` object always includes `unofficial: true` and `disclaimer`.
+- `gmp` object always includes `unofficial: true`, `disclaimer`, and `available` (false when NSE has no GMP — do not invent values).
+- Live data provider: see [11-ipo-data-provider.md](11-ipo-data-provider.md).
 
 ---
 

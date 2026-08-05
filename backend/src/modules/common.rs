@@ -1,7 +1,7 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Serialize)]
-pub struct ApiResponse<T: Serialize> {
+#[derive(Serialize, Deserialize)]
+pub struct ApiResponse<T> {
     pub success: bool,
     pub data: T,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -10,7 +10,7 @@ pub struct ApiResponse<T: Serialize> {
     pub error: Option<()>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Meta {
     pub page: i64,
     pub per_page: i64,

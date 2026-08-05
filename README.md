@@ -29,7 +29,7 @@ Full phased plan: **[docs/05-roadmap.md](docs/05-roadmap.md)**.
 InvestIQ-AI/
 ├── docs/                 # Architecture, schema, API, wireframes, roadmap, deploy
 ├── backend/              # Rust Axum API
-│   ├── migrations/       # SQL migrations + seed IPOs
+│   ├── migrations/       # SQL migrations (live NSE IPO sync; no dummy seeds)
 │   └── src/modules/      # auth, ipo, portfolio, journal, ai
 ├── mobile/               # Flutter application
 ├── compose.yml           # Podman Compose (preferred)
@@ -56,6 +56,7 @@ InvestIQ-AI/
 8. **[Run locally (full guide)](docs/10-local-run.md)** ← start here for day-to-day dev
 9. **[Offline container images (no docker.io)](docs/11-offline-container-images.md)** ← second laptop / blocked registry
 10. **[Google / Firebase Auth setup](CONFIGURATION_REQUIRED.md)** ← required for Continue with Google
+11. **[IPO data provider (NSE)](docs/11-ipo-data-provider.md)**
 
 ---
 

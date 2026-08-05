@@ -200,7 +200,7 @@ Ensure the device can reach that IP and that firewall allows port `8080`.
 
 1. **Register** a new account (email + password ≥ 8 characters).  
 2. **Home** — app shell loads; open IPOs from chips/tabs.  
-3. **IPOs** — seeded companies appear; open detail; GMP shows **Unofficial**.  
+3. **IPOs** — live NSE IPOs appear after sync (~few seconds on API boot); open detail; missing fields show **Not Available**; GMP is **Not Available** unless a real unofficial source is configured (NSE does not publish GMP).  
 4. **Allotment** — enter PAN last 4 and/or application number; get pending/allotted/not_allotted.  
 5. **Portfolio** — add a holding; see value, today P&L, allocation.  
 6. **Journal** — log a trade; check stats strip.  
@@ -248,7 +248,7 @@ podman volume ls
 | Flutter can’t reach API | Check `API_BASE_URL`; use `10.0.2.2` on Android emulator |
 | `cargo` build fails on OpenSSL | `sudo dnf -y install openssl-devel gcc pkgconf-pkg-config` |
 | CORS errors in browser | Dev allows `CORS_ORIGINS=*`; ensure API is on `127.0.0.1:8080` |
-| Empty IPO list | Migrations seed data on first API start; check `cargo run` logs |
+| Empty IPO list | Wait for NSE sync on API boot (`initial NSE IPO sync complete` in logs) or `curl -X POST http://127.0.0.1:8080/api/v1/ipos/sync`; see [docs/11-ipo-data-provider.md](11-ipo-data-provider.md) |
 
 ---
 

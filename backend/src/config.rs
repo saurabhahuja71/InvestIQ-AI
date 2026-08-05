@@ -19,6 +19,7 @@ pub struct Config {
     pub firebase_project_id: Option<String>,
     pub google_client_ids: Vec<String>,
     pub ipo_sync_interval_secs: u64,
+    pub ipo_list_cache_ttl_secs: u64,
 }
 
 impl Config {
@@ -87,7 +88,11 @@ impl Config {
             ipo_sync_interval_secs: env::var("IPO_SYNC_INTERVAL_SECS")
                 .ok()
                 .and_then(|v| v.parse().ok())
-                .unwrap_or(900),
+                .unwrap_or(1800),
+            ipo_list_cache_ttl_secs: env::var("IPO_LIST_CACHE_TTL_SECS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(120),
         })
     }
 
