@@ -55,7 +55,7 @@ class IpoDetailScreen extends ConsumerWidget {
                     _kv(context, 'Issue Price', _money(ipo['issue_price'])),
                     _kv(context, 'Lot Size', _str(ipo['lot_size'])),
                     _kv(context, 'Minimum Investment', _money(ipo['min_investment'])),
-                    _kv(context, 'Issue Size (₹ Cr)', _str(ipo['issue_size_cr'])),
+                    _kv(context, 'Issue Size (Rs Cr)', _str(ipo['issue_size_cr'])),
                     _kv(context, 'Face Value', _money(ipo['face_value'])),
                     _kv(context, 'Issue Type', _str(ipo['issue_type'])),
                     _kv(context, 'Registrar', _str(ipo['registrar'])),
@@ -211,7 +211,7 @@ class IpoDetailScreen extends ConsumerWidget {
 
   static String _money(dynamic v) {
     if (v == null) return _na;
-    return '₹$v';
+    return 'Rs $v';
   }
 
   static String _times(dynamic v) {
@@ -223,7 +223,7 @@ class IpoDetailScreen extends ConsumerWidget {
     final low = ipo['price_band_low'];
     final high = ipo['price_band_high'];
     if (low == null && high == null) return _na;
-    return '₹${low ?? '—'} – ₹${high ?? '—'}';
+    return 'Rs ${low ?? '-'} - Rs ${high ?? '-'}';
   }
 
   static String _leadManagers(dynamic raw) {
@@ -279,7 +279,7 @@ class IpoDetailScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Indicative only — confirm with the registrar.',
+              'Indicative only - confirm with the registrar.',
               style: Theme.of(ctx).textTheme.labelSmall,
             ),
           ],
@@ -491,7 +491,7 @@ class _GmpCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            available ? '₹${gmp?['value'] ?? ipo['gmp_value']}' : 'Not Available',
+            available ? 'Rs ${gmp?['value'] ?? ipo['gmp_value']}' : 'Not Available',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   color: available ? null : scheme.outline,
                 ),

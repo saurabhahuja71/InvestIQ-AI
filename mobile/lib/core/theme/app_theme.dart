@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -16,6 +17,9 @@ class AppColors {
 }
 
 class AppTheme {
+  /// Bundled in [pubspec.yaml] — CanvasKit must not download fonts.gstatic.com.
+  static const String appFontFamily = 'Roboto';
+
   static ThemeData get light {
     final base = ColorScheme.fromSeed(
       seedColor: AppColors.primaryLight,
@@ -35,16 +39,23 @@ class AppTheme {
   }
 
   static ThemeData _build(ColorScheme scheme, Brightness brightness) {
-    final textTheme = GoogleFonts.interTextTheme(
-      brightness == Brightness.dark
-          ? ThemeData.dark().textTheme
-          : ThemeData.light().textTheme,
-    );
+    final baseText = brightness == Brightness.dark
+        ? ThemeData.dark().textTheme
+        : ThemeData.light().textTheme;
+
+    final TextTheme textTheme;
+    if (!kIsWeb && GoogleFonts.config.allowRuntimeFetching) {
+      textTheme = GoogleFonts.interTextTheme(baseText);
+    } else {
+      textTheme = baseText.apply(fontFamily: appFontFamily);
+    }
 
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
       textTheme: textTheme,
+      primaryTextTheme: textTheme,
+      fontFamily: appFontFamily,
       scaffoldBackgroundColor: scheme.surface,
       appBarTheme: AppBarTheme(
         centerTitle: false,

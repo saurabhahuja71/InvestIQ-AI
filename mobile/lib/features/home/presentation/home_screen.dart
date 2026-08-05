@@ -27,7 +27,7 @@ class HomeScreen extends ConsumerWidget {
               style: Theme.of(context).textTheme.titleMedium,
             ),
             Text(
-              'IPO · Portfolio · Journal · AI',
+              'IPO / Portfolio / Journal / AI',
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                     color: scheme.onSurfaceVariant,
                   ),

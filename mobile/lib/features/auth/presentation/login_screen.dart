@@ -131,7 +131,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'IPO · Portfolio · Journal · AI',
+                      'IPO / Portfolio / Journal / AI',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: scheme.onSurfaceVariant,
@@ -148,7 +148,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             )
                           : const Icon(Icons.g_mobiledata_rounded, size: 28),
                       label: Text(
-                        _googleLoading ? 'Connecting…' : 'Continue with Google',
+                        _googleLoading ? 'Connecting...' : 'Continue with Google',
                       ),
                       style: FilledButton.styleFrom(
                         minimumSize: const Size.fromHeight(48),
@@ -214,7 +214,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     const SizedBox(height: 24),
                     Text(
-                      'Encrypted in transit · JWT auth · Secure storage',
+                      'Encrypted in transit | JWT auth | Secure storage',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
                             color: scheme.onSurfaceVariant,

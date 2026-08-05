@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 class GlassCard extends StatelessWidget {
@@ -20,30 +21,37 @@ class GlassCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final fill = isDark
+        ? const Color(0xFF111827).withValues(alpha: kIsWeb ? 0.95 : 0.72)
+        : Colors.white.withValues(alpha: kIsWeb ? 0.96 : 0.78);
+
+    // BackdropFilter is expensive / flaky on Flutter web CanvasKit and can
+    // make cards look blank or washed out when fonts/GPU path are stressed.
+    final content = Material(
+      color: fill,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: borderColor ?? scheme.outline.withValues(alpha: 0.12),
+            ),
+          ),
+          child: child,
+        ),
+      ),
+    );
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Material(
-          color: isDark
-              ? const Color(0xFF111827).withValues(alpha: 0.72)
-              : Colors.white.withValues(alpha: 0.78),
-          child: InkWell(
-            onTap: onTap,
-            child: Container(
-              padding: padding,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: borderColor ?? scheme.outline.withValues(alpha: 0.12),
-                ),
-              ),
-              child: child,
+      child: kIsWeb
+          ? content
+          : BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              child: content,
             ),
-          ),
-        ),
-      ),
     );
   }
 }

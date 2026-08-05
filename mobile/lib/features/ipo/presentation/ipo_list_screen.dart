@@ -252,7 +252,7 @@ class _IpoListScreenState extends ConsumerState<IpoListScreen>
                   const Icon(Icons.cloud_off_outlined, size: 18),
                   const SizedBox(width: 8),
                   const Expanded(
-                    child: Text('Showing offline cache — pull to refresh'),
+                    child: Text('Showing offline cache - pull to refresh'),
                   ),
                   TextButton(onPressed: _onRefresh, child: const Text('Retry')),
                 ],
@@ -332,7 +332,7 @@ class _IpoCard extends StatelessWidget {
     final high = ipo['price_band_high'];
     final band = (low == null && high == null)
         ? 'Not Available'
-        : '${low ?? '—'}–${high ?? '—'}';
+        : '${low ?? '-'} - ${high ?? '-'}';
     final lot = ipo['lot_size']?.toString() ?? 'Not Available';
     final exchange = ipo['exchange']?.toString();
     final open = ipo['open_date']?.toString() ?? 'Not Available';
@@ -397,7 +397,7 @@ class _IpoCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Open $open · Close $close',
+            'Open $open | Close $close',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: scheme.onSurfaceVariant,
                 ),

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import 'core/auth/firebase_config_validator.dart';
@@ -16,6 +17,9 @@ import 'firebase_options.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Avoid blank/stuck web loads when fonts.gstatic.com is blocked.
+  GoogleFonts.config.allowRuntimeFetching = false;
 
   // Pick a reachable API origin early (tunnel / adb reverse / LAN).
   try {
