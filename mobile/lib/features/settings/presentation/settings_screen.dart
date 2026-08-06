@@ -71,13 +71,19 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const Divider(),
           ListTile(
+            leading: const Icon(Icons.star_outline_rounded),
+            title: const Text('IPO watchlist'),
+            onTap: () => context.push('/watchlist'),
+          ),
+          ListTile(
             leading: const Icon(Icons.notifications_outlined),
-            title: const Text('Notification preferences'),
+            title: const Text('IPO alert settings'),
+            subtitle: const Text('Open, close, allotment, listing'),
             onTap: () => context.push('/notifications/prefs'),
           ),
           ListTile(
             leading: const Icon(Icons.notifications_active_outlined),
-            title: const Text('Notification inbox'),
+            title: const Text('IPO alerts inbox'),
             onTap: () => context.push('/notifications'),
           ),
           ListTile(

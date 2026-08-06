@@ -14,6 +14,7 @@ import '../../features/journal/presentation/trade_entry_screen.dart';
 import '../../features/notifications/presentation/notifications_screen.dart';
 import '../../features/portfolio/presentation/portfolio_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
+import '../../features/watchlist/presentation/watchlist_screen.dart';
 import '../widgets/main_shell.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -77,6 +78,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
       GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
+      GoRoute(
+        path: '/watchlist',
+        builder: (_, __) => const WatchlistScreen(),
+      ),
       GoRoute(
         path: '/notifications',
         builder: (_, __) => const NotificationsScreen(),

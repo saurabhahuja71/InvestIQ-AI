@@ -6,10 +6,10 @@
 
 | Field | Value |
 |-------|--------|
-| **Last updated** | 2026-08-05 |
-| **Product phase** | Milestone 2 — Production-quality IPO Tracker (+ Google Auth from M1) |
-| **Overall completion** | ~75% toward Play Store MVP |
-| **Release readiness** | **~62%** |
+| **Last updated** | 2026-08-06 |
+| **Product phase** | Milestone 3 — Watchlist & IPO Alerts (M1 Google Auth + M2 IPO Tracker done) |
+| **Overall completion** | ~78% toward Play Store MVP |
+| **Release readiness** | **~65%** |
 | **Default branch** | `main` |
 | **Primary stack** | Flutter 3.35 · Rust/Axum · PostgreSQL 16 · Redis 7 · Firebase Auth |
 | **IPO data source** | **NSE India public APIs** (`/api/ipo-current-issue`, `/api/public-past-issues`) |
@@ -18,15 +18,15 @@
 
 ## 1. Executive summary
 
-**Milestone 1 (Google Auth + real NSE IPO) and Milestone 2 (production IPO UX/sync) are both in code:**
+**Milestones 1–3 are in code:**
 
-- **Google Sign-In** (Firebase Auth + Google provider on Flutter; backend verifies Firebase/Google ID tokens via JWKS; issues app JWT + refresh)
-- **Production IPO Tracker** on live NSE data: background sync, Redis list cache, `POST /ipos/sync`, refresh query param, expanded models, production Flutter list/detail UX
-- Email/password auth still available as secondary path
+- **M1 — Google Sign-In** (Firebase Auth + Google provider; backend JWKS → app JWT)
+- **M2 — Production IPO Tracker** on live NSE data (sync, cache, list/detail UX)
+- **M3 — Watchlist & IPO Alerts** (Postgres-backed multi-device watchlist, configurable IPO event alerts, offline Hive cache, Material 3 star UI + badge)
 
-Other modules (portfolio, journal, AI) remain as before — not the focus of recent milestones.
+Other modules (portfolio, journal, AI) remain as before — **not** modified for M3.
 
-**Still not store-ready:** Firebase/Google OAuth credentials must be filled by the operator; Android SDK/signing; hosted privacy policy; FCM push delivery.
+**Still not store-ready:** Firebase/Google OAuth credentials; Android SDK/signing; hosted privacy policy; **FCM push delivery** (in-app notifications only for IPO alerts).
 
 ---
 
@@ -37,6 +37,7 @@ Other modules (portfolio, journal, AI) remain as before — not the focus of rec
 - [x] **Podman Compose** (`compose.yml`) + dnf install script, CI workflow, `.env.example`
 - [x] Migrations: init + MVP + **google_auth** + **`20240805000000_ipo_live_source`** (drop seeds, NSE sync columns)
 - [x] **IPO data provider doc** (`docs/11-ipo-data-provider.md`)
+- [x] **API design** updated for `/watchlist` and `/alerts` (Milestone 3)
 - [x] **Offline container images** on GitHub Release `container-images-v1` + load/export scripts
 
 ### Backend
@@ -46,32 +47,26 @@ Other modules (portfolio, journal, AI) remain as before — not the focus of rec
 - [x] **NSE IPO sync** (`IpoSyncService`): boot + periodic refresh, Redis lock, list cache TTL
 - [x] `GET /ipos` filters: status, board, q, page, per_page, refresh; `POST /ipos/sync`
 - [x] IPO detail: dates, band, lot, min investment, registrar, lead managers, subscription, RHP URL, ratios link
-- [x] IPO list/detail/watchlist/AI summary + **allotment engine** (pending/allotted/not_allotted)
-- [x] No invented GMP / logos / websites / structured financials
-- [x] Portfolio holdings with **last_price / prev_close**, price update API, txn avg-cost rollup
-- [x] Analytics: total value/cost, **today P&L + %**, unrealized, XIRR, **CAGR**, allocations
-- [x] Journal CRUD + analytics + AI mistakes
-- [x] AI: remote chat when `AI_API_KEY` set; **local grounded engine** otherwise; remote failure fallback
-- [x] Notifications module: list, read, prefs, devices, price alerts, **sync-ipo-events**
+- [x] **Watchlist (M3):** `GET/POST /watchlist`, `DELETE /watchlist/{ipo_id}` — authz to current user; Postgres `ipo_watchlist`
+- [x] **Alerts (M3):** `GET /alerts`, `GET|PUT /alerts/preferences`, `POST /alerts/sync`
+- [x] Alert evaluation for **watched IPOs only**: open, closes today, allotment, listing tomorrow, listing today (prefs toggles)
+- [x] Legacy aliases: `GET /ipos/watchlist`, `POST|DELETE /ipos/{id}/watch`, `POST /notifications/sync-ipo-events`
+- [x] Portfolio / journal / AI / price alerts unchanged
 - [x] Redis **rate limit** middleware on `/api/v1`
-- [x] AES seal on data export when `AES_KEY_BASE64` set
-- [x] Structured JSON logging; production JWT/CORS checks
-- [x] Unit tests: XIRR, CAGR, allotment, crypto, AI local disclaimer, **NSE parsers** (**13 tests**)
+- [x] Unit tests: XIRR, CAGR, allotment, crypto, AI, NSE parsers, **IPO alert logic** (**19 tests**)
 
 ### Mobile
 - [x] Material 3 shell, auth, IPO, portfolio, journal, AI, settings
-- [x] **Continue with Google** on login/register (Firebase + google_sign_in)
-- [x] IPO tabs: Open / Upcoming / Closed / Listed; board filter, debounced search
-- [x] Pull-to-refresh (triggers NSE sync), pagination / infinite scroll
-- [x] Loading skeleton, empty state, error state + Retry; offline Hive cache + banner
-- [x] IPO detail: all fields with API values or **Not Available**; prospectus/website links via `url_launcher`
-- [x] Settings wired to backend (currency, biometric, password, export clipboard, delete)
-- [x] Notifications inbox + prefs screens
-- [x] Allotment form (PAN last4 + application number)
-- [x] Portfolio shows XIRR/CAGR/today/unrealized
-- [x] Offline: Hive cache for IPOs/portfolios; journal write queue; connectivity flush
-- [x] Global error widget + `AppException` mapping
-- [x] `flutter analyze` clean
+- [x] **Continue with Google** on login/register
+- [x] IPO tabs + board filter + search + pull-to-refresh + pagination + skeleton/empty/error
+- [x] **★ on IPO cards / detail** — add/remove watchlist
+- [x] **Watchlist page** (`/watchlist`): name, status, open/close/listing dates, subscription; offline cache banner
+- [x] **Badge** on IPO Tracker app bar with watched count
+- [x] **IPO alert settings** page (enable/disable each alert type) → `PUT /alerts/preferences`
+- [x] **IPO alerts inbox** → `GET /alerts` (+ sync)
+- [x] Offline: Hive cache for watchlist + alert prefs; offline write queue for watchlist mutations
+- [x] Settings links: watchlist, alert settings, alerts inbox
+- [x] `flutter analyze` clean on changed modules
 
 ---
 
@@ -83,16 +78,17 @@ Other modules (portfolio, journal, AI) remain as before — not the focus of rec
 | **Firebase project + OAuth client IDs in `.env` / dart-defines** | **Required for live Google login** |
 | Android SDK + signed AAB | Missing on this host |
 | Hosted privacy policy / terms URLs | Missing |
-| Real FCM push send (device tokens stored only) | Partial |
+| Real FCM push send (device tokens stored only) | Partial — M3 uses **in-app** notifications |
 | Live equity price feed (portfolio MTM) | Deferred |
 | Tests ≥ 80% coverage | Not met (~unit core only) |
 | Integration tests (HTTP+DB) | Missing |
 | iOS TestFlight packaging | Needs macOS |
 
-### Explicitly post-MVP / out of Milestone 2
+### Explicitly post-MVP
 - Broker import, premium, multi-currency FX
 - Official registrar allotment APIs
 - Paid IPO data vendors for GMP / logos / financials
+- Background server-wide alert worker (today: on-demand `/alerts/sync` + client open of inbox)
 
 ---
 
@@ -100,15 +96,15 @@ Other modules (portfolio, journal, AI) remain as before — not the focus of rec
 
 | Severity | Issue |
 |----------|--------|
-| High | Google login needs real `FIREBASE_PROJECT_ID` + client IDs; unconfigured → clear server/app errors |
-| Medium | NSE may 403 without cookies / block changes; sync fails soft and serves last DB snapshot |
-| Medium | Allotment is **indicative** (hash-based), not registrar-authoritative |
-| Medium | Logo, website, industry, description, structured financials, GMP are **Not Available** from NSE (documented) |
-| Medium | Issue size ₹ Cr is estimated from shares × mid band when NSE gives share count |
-| Low | Company names on some upcoming rows may stay symbol-like until detail enrich runs |
+| High | Google login needs real `FIREBASE_PROJECT_ID` + client IDs |
+| Medium | NSE may 403; sync fails soft and serves last DB snapshot |
+| Medium | Allotment engine is **indicative**, not registrar-authoritative |
+| Medium | Logo, website, industry, description, structured financials, GMP often **Not Available** from NSE |
+| Medium | IPO alerts are **in-app only** until FCM send is wired; require user/session to call sync |
+| Medium | Alerts only fire for **watchlist** IPOs (by design for M3) |
+| Low | Company names on some upcoming rows may stay symbol-like until detail enrich |
 | Low | Flutter test runner may fail under corporate proxy WebSocket 502 |
 | Low | Default CORS `*` only allowed in non-production |
-| Low | Delete-account / change-password require password; Google-only accounts get a clear validation error |
 
 ---
 
@@ -117,8 +113,9 @@ Other modules (portfolio, journal, AI) remain as before — not the focus of rec
 1. Handlers still SQL-heavy — extract repositories for larger coverage.  
 2. No OpenAPI contract between Flutter and Rust.  
 3. Price snapshots table underused vs holdings columns.  
-4. FCM: register device only — need worker to send.  
-5. Expand widget/integration tests next (IPO list widget coverage still thin).
+4. FCM: register device only — need worker to send push.  
+5. Optional: cron/worker to run watchlist alert evaluation without client open.  
+6. Expand widget/integration tests (Flutter env may block `flutter test`).
 
 ---
 
@@ -128,7 +125,7 @@ Other modules (portfolio, journal, AI) remain as before — not the focus of rec
 |------|--------|
 | JWT | Access + rotating refresh; production secret enforced |
 | SQL | sqlx parameterized |
-| AuthN/Z | Ownership checks; Forbidden for suspended |
+| AuthN/Z | Ownership checks on watchlist / alerts / notifications |
 | Rate limit | Redis fixed window on API |
 | CORS | Configurable; `*` blocked in production |
 | Secrets | `.env` / env vars; no secrets in git |
@@ -141,12 +138,10 @@ Other modules (portfolio, journal, AI) remain as before — not the focus of rec
 | Target | Status |
 |--------|--------|
 | `cargo check` | Pass |
-| `cargo test` | Pass (**13 tests**) |
-| `cargo clippy -D warnings` | Pass |
-| `flutter analyze` | **Pass** |
-| `flutter test` | Environment-sensitive |
+| `cargo test` | Pass (**19 tests**) |
+| `flutter analyze` (M3 modules) | **Pass** |
+| `flutter test` | Environment-sensitive (proxy WebSocket 502 on this host) |
 | Android debug/release | Blocked without SDK |
-| Web build | Google button present; needs Firebase config |
 
 ---
 
@@ -154,20 +149,23 @@ Other modules (portfolio, journal, AI) remain as before — not the focus of rec
 
 | Suite | Est. coverage | Status |
 |-------|---------------|--------|
-| Rust unit (analytics, allotment, crypto, AI, **NSE parsers**) | Core paths | Pass |
-| Manual IPO API smoke (2026-08-05) | List/search/detail/sync | Pass — live NSE open/upcoming/closed/listed |
+| Rust unit (analytics, allotment, crypto, AI, NSE, **alert logic**) | Core paths | Pass (19) |
+| Manual IPO API smoke (2026-08-05) | List/search/detail/sync | Pass |
+| Milestone 3 unit (alert evaluate + prefs merge) | Pure logic | Pass |
 | Rust integration | ~0% | Missing |
-| Flutter unit/widget | Low | Minimal |
+| Flutter unit/widget | Low | Env-blocked on host |
 | **Target ≥ 80%** | Not met | Next priority |
 
-### Milestone 2 manual checklist (verified)
+### Milestone 3 checklist
 
-- [x] Search works (`q=ardee`)
-- [x] Filters work (status + board=sme)
-- [x] Refresh / sync works (`POST /ipos/sync` + boot sync)
-- [x] API failures → DB/Hive cache path implemented
-- [x] Offline cache path in Flutter providers
-- [x] Details page loads with registrar, lead managers, RHP, subscription; N/A for logo/GMP/website
+- [x] Watchlist add/remove/list (Postgres, auth)
+- [x] Multi-device sync via server state
+- [x] Offline Hive cache + write queue for watchlist
+- [x] Alert prefs save (`ipo_open`, `ipo_close`, `allotment`, `listing_tomorrow`, `listing_day`)
+- [x] Alert evaluation for watched IPOs (pure logic unit-tested)
+- [x] UI: ★ cards, watchlist page, badge, settings
+- [ ] End-to-end HTTP+DB integration test (not automated yet)
+- [ ] FCM push delivery (deferred)
 
 ---
 
@@ -176,26 +174,24 @@ Other modules (portfolio, journal, AI) remain as before — not the focus of rec
 | Gate | Ready? |
 |------|--------|
 | IPO Tracker production data path | **Yes (NSE-backed)** |
+| Watchlist + IPO alerts | **Yes (in-app)** |
 | Four MVP modules usable | **Yes (local full stack)** |
-| Real NSE IPO list/detail | **Yes** |
 | Google Sign-In E2E | **Code ready; needs Firebase credentials** |
 | Backend hardened enough for staging | Mostly |
 | Android signed AAB | No |
 | Store legal assets | No |
-| Tests/CI green for Android | No |
-| **Weighted readiness** | **~62%** |
+| **Weighted readiness** | **~65%** |
 
 ---
 
 ## 10. Next priorities
 
-1. **Operator:** create Firebase project + set `FIREBASE_*` / `GOOGLE_CLIENT_IDS` and re-test Google login E2E  
-2. Install Android SDK → debug APK + release AAB recipe  
-3. Integration tests (Google auth, IPO sync)  
-4. Flutter widget tests for IPO list empty/error  
+1. **Operator:** Firebase project + secrets for Google login E2E  
+2. Install Android SDK → debug APK + release AAB  
+3. Integration tests (auth, watchlist, alerts/sync)  
+4. FCM send path for real push on IPO events  
 5. Privacy policy page + in-app links  
-6. FCM send path for notifications  
-7. Staging deploy smoke script  
+6. Staging deploy smoke script  
 
 ---
 
@@ -207,76 +203,52 @@ Other modules (portfolio, journal, AI) remain as before — not the focus of rec
 | 2026-08-03 | **Phase 1 MVP completion:** portfolio calc, allotment, AI local+remote, settings, notifications, errors, offline, clippy clean |
 | 2026-08-03 | Switched local ops docs/scripts to **Podman Compose** + **dnf** install helpers |
 | 2026-08-03 | Added **docs/10-local-run.md** (full local run guide) and linked from README |
-| 2026-08-03 | **Milestone 1:** Google/Firebase auth (`POST /auth/google`), NSE real IPO sync, seed removal, Flutter Google button + IPO UX |
-| 2026-08-03 | **Offline images:** exported Postgres 16 + Redis 7 Alpine to GitHub Release `container-images-v1`; load/export scripts + docs |
-| 2026-08-03 | **Google Auth complete (code):** FlutterFire + Android/Web scaffolding, `GET /auth/providers`, `CONFIGURATION_REQUIRED.md`; blocked only on operator Firebase secrets |
-| 2026-08-05 | **Milestone 2:** live NSE IPO sync service, Redis list cache, production Flutter IPO list/detail, provider docs |
+| 2026-08-03 | **Milestone 1:** Google/Firebase auth, NSE real IPO sync, seed removal, Flutter Google button + IPO UX |
+| 2026-08-03 | **Offline images:** Postgres 16 + Redis 7 on GitHub Release `container-images-v1` |
+| 2026-08-03 | **Google Auth complete (code):** FlutterFire scaffolding; blocked on operator Firebase secrets |
+| 2026-08-05 | **Milestone 2:** live NSE IPO sync, Redis list cache, production Flutter IPO list/detail, provider docs |
+| 2026-08-06 | **Milestone 3:** `/watchlist` + `/alerts` APIs, watchlist-scoped IPO alert evaluation, Flutter star/badge/watchlist page/alert prefs, offline cache |
 
 ---
 
 ## 12. How to test this build
 
 **Canonical guide:** [docs/10-local-run.md](docs/10-local-run.md)  
-**No docker.io:** [docs/11-offline-container-images.md](docs/11-offline-container-images.md)  
-**IPO source:** [docs/11-ipo-data-provider.md](docs/11-ipo-data-provider.md)
+**IPO source:** [docs/11-ipo-data-provider.md](docs/11-ipo-data-provider.md)  
+**API surface:** [docs/03-api-design.md](docs/03-api-design.md)
 
-### Notes — container images on GitHub
-
-| Note | Detail |
-|------|--------|
-| Why | Second laptop / environments cannot pull from `docker.io` |
-| What | `postgres:16-alpine` + `redis:7-alpine` saved as gzipped `podman save` tarballs |
-| Where | GitHub Release **[container-images-v1](https://github.com/saurabhahuja71/InvestIQ-AI/releases/tag/container-images-v1)** (not in git history) |
-| Assets | `postgres-16-alpine.tar.gz`, `redis-7-alpine.tar.gz` |
-| Load | `./scripts/load-container-images.sh dist/container-images` |
-| Re-export | `./scripts/export-container-images.sh` then upload a new release if tags change |
-
-### Infra + API (normal path — docker.io OK)
+### Milestone 3 API smoke
 
 ```bash
-cd InvestIQ-AI && cp -n .env.example .env
-# Set FIREBASE_PROJECT_ID and GOOGLE_CLIENT_IDS for Google login
-./scripts/compose.sh up -d postgres redis
-cd backend && cargo run
-# wait for: initial NSE IPO sync complete
-# curl http://127.0.0.1:8080/health
-# curl -X POST http://127.0.0.1:8080/api/v1/ipos/sync
-# curl 'http://127.0.0.1:8080/api/v1/ipos?status=open&per_page=5'
+# after login → ACCESS token
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8080/api/v1/watchlist
+curl -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"ipo_id":"<UUID>"}' http://127.0.0.1:8080/api/v1/watchlist
+curl -X DELETE -H "Authorization: Bearer $TOKEN" \
+  http://127.0.0.1:8080/api/v1/watchlist/<UUID>
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8080/api/v1/alerts/preferences
+curl -X PUT -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"preferences":{"ipo_open":true,"ipo_close":true,"allotment":true,"listing_tomorrow":true,"listing_day":false}}' \
+  http://127.0.0.1:8080/api/v1/alerts/preferences
+curl -X POST -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8080/api/v1/alerts/sync
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8080/api/v1/alerts
 ```
 
-### Infra when docker.io is blocked
+### Flutter checklist (M3)
 
-```bash
-mkdir -p dist/container-images
-gh release download container-images-v1 -D dist/container-images
-./scripts/load-container-images.sh dist/container-images
-./scripts/compose.sh up -d postgres redis
-```
-
-### Flutter (Chrome)
-
-```bash
-export PATH="$HOME/development/flutter/bin:$PATH"
-cd mobile
-flutter pub get
-flutter run -d chrome \
-  --dart-define=API_BASE_URL=http://127.0.0.1:8080 \
-  --dart-define=FIREBASE_API_KEY=... \
-  --dart-define=FIREBASE_APP_ID=... \
-  --dart-define=FIREBASE_MESSAGING_SENDER_ID=... \
-  --dart-define=FIREBASE_PROJECT_ID=... \
-  --dart-define=FIREBASE_AUTH_DOMAIN=... \
-  --dart-define=GOOGLE_WEB_CLIENT_ID=...
-```
-
-Checklist: Google sign-in (or email) → **IPOs (live NSE)** → filters/search/refresh → detail N/A fields → (other modules unchanged).
+1. Sign in → **IPOs** → tap ★ on a card → badge increments.  
+2. Open **Watchlist** (star icon in app bar or Home chip) → fields + pull-to-refresh.  
+3. **Settings → IPO alert settings** → toggle prefs → Save.  
+4. Open **IPO alerts inbox** → sync creates events when watchlist dates match today/tomorrow.  
+5. Airplane mode → watchlist still shows Hive cache; mutations queue until online.
 
 ---
 
 ## 13. Definition of done (MVP store)
 
-- [x] Clippy clean  
+- [x] Clippy / analyze clean for current modules  
 - [x] IPO Tracker on live exchange data (no dummy seeds)  
+- [x] Watchlist + configurable IPO alerts (in-app)  
 - [ ] Tests ≥ 80%  
 - [ ] Signed AAB + privacy policy  
 - [ ] This file **Release readiness ≥ 85%**

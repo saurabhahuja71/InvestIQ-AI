@@ -101,9 +101,9 @@ class HomeScreen extends ConsumerWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: _QuickChip(
-                    icon: Icons.auto_awesome,
-                    label: 'Ask AI',
-                    onTap: () => context.go('/ai'),
+                    icon: Icons.star_rounded,
+                    label: 'Watchlist',
+                    onTap: () => context.push('/watchlist'),
                   ),
                 ),
               ],

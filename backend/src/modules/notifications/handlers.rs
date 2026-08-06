@@ -157,6 +157,7 @@ async fn get_prefs(
             "ipo_open": true,
             "ipo_close": true,
             "allotment": true,
+            "listing_tomorrow": true,
             "listing_day": true,
             "portfolio_alert": true,
             "price_alert": true,
@@ -252,95 +253,15 @@ async fn delete_price_alert(
     Ok(Json(ApiResponse::ok("deleted")))
 }
 
-/// Generate IPO open/close/listing notifications for the current user from calendar data.
+/// Generate IPO alerts for the user's **watchlist** + evaluate price alerts.
 async fn sync_ipo_events(
     State(state): State<AppState>,
     user: AuthUser,
 ) -> AppResult<Json<ApiResponse<serde_json::Value>>> {
-    let prefs: serde_json::Value = sqlx::query_scalar(
-        r#"SELECT prefs FROM notification_prefs WHERE user_id = $1"#,
-    )
-    .bind(user.user_id)
-    .fetch_optional(state.db())
-    .await?
-    .unwrap_or_else(|| serde_json::json!({}));
+    let mut created =
+        crate::modules::alerts::handlers::generate_watchlist_alerts(&state, user.user_id).await?;
 
-    let mut created = 0i64;
-
-    #[derive(FromRow)]
-    struct IpoEvent {
-        id: Uuid,
-        name: String,
-        status: String,
-        close_date: Option<chrono::NaiveDate>,
-        listing_date: Option<chrono::NaiveDate>,
-    }
-
-    let ipos = sqlx::query_as::<_, IpoEvent>(
-        r#"
-        SELECT i.id, c.name, i.status::text, i.close_date, i.listing_date
-        FROM ipos i JOIN companies c ON c.id = i.company_id
-        WHERE i.status IN ('open', 'upcoming', 'closed', 'listed')
-        ORDER BY i.open_date NULLS LAST
-        LIMIT 50
-        "#,
-    )
-    .fetch_all(state.db())
-    .await?;
-
-    let today = Utc::now().date_naive();
-
-    for ipo in ipos {
-        if prefs.get("ipo_open").and_then(|v| v.as_bool()).unwrap_or(true)
-            && ipo.status == "open"
-        {
-            created += insert_unique_notif(
-                &state,
-                user.user_id,
-                "ipo_open",
-                &format!("{} is open", ipo.name),
-                "IPO subscription window is open. Review RHP and risk before applying.",
-                serde_json::json!({ "ipo_id": ipo.id }),
-            )
-            .await?;
-        }
-        if prefs.get("ipo_close").and_then(|v| v.as_bool()).unwrap_or(true) {
-            if let Some(cd) = ipo.close_date {
-                if cd == today || ipo.status == "closed" {
-                    created += insert_unique_notif(
-                        &state,
-                        user.user_id,
-                        "ipo_close",
-                        &format!("{} closing / closed", ipo.name),
-                        "IPO close window — verify application status with your broker.",
-                        serde_json::json!({ "ipo_id": ipo.id }),
-                    )
-                    .await?;
-                }
-            }
-        }
-        if prefs
-            .get("listing_day")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(true)
-        {
-            if let Some(ld) = ipo.listing_date {
-                if ld == today || ipo.status == "listed" {
-                    created += insert_unique_notif(
-                        &state,
-                        user.user_id,
-                        "listing_day",
-                        &format!("{} listing", ipo.name),
-                        "Listing day context only — past GMP is unofficial and not predictive.",
-                        serde_json::json!({ "ipo_id": ipo.id }),
-                    )
-                    .await?;
-                }
-            }
-        }
-    }
-
-    // Evaluate price alerts against holdings last_price
+    // Evaluate price alerts against holdings last_price (unchanged; not Milestone 3 scope)
     let alerts = sqlx::query_as::<_, PriceAlertRow>(
         r#"
         SELECT id, symbol, condition, threshold, active, triggered_at, created_at

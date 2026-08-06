@@ -66,10 +66,29 @@ Response: `{ user, access_token, refresh_token, expires_in }`
 | GET | `/ipos/calendar` | Calendar range |
 | GET | `/ipos/:id` | Detail + financials + GMP |
 | GET | `/ipos/:id/ai-summary` | Cached AI DRHP summary |
-| POST | `/ipos/:id/watch` | Add watchlist |
-| DELETE | `/ipos/:id/watch` | Remove watchlist |
-| GET | `/ipos/watchlist` | User IPO watchlist |
+| POST | `/ipos/:id/watch` | Add watchlist (legacy alias) |
+| DELETE | `/ipos/:id/watch` | Remove watchlist (legacy alias) |
+| GET | `/ipos/watchlist` | User IPO watchlist (legacy alias) |
 | POST | `/ipos/:id/allotment-check` | Check allotment |
+
+## Watchlist (Milestone 3)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/watchlist` | Yes | List watched IPOs (Postgres-backed, multi-device) |
+| POST | `/watchlist` | Yes | Body `{ "ipo_id": "<uuid>" }` — add to watchlist |
+| DELETE | `/watchlist/:id` | Yes | Remove by **ipo_id** |
+
+## IPO Alerts (Milestone 3)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/alerts` | Yes | In-app IPO alerts (open/close/allotment/listing) |
+| GET | `/alerts/preferences` | Yes | IPO alert toggles |
+| PUT | `/alerts/preferences` | Yes | Body `{ "preferences": { "ipo_open": true, ... } }` |
+| POST | `/alerts/sync` | Yes | Evaluate watchlist dates → create notifications |
+
+**Alert preference keys:** `ipo_open`, `ipo_close` (closes today), `allotment`, `listing_tomorrow`, `listing_day` (listing today). Alerts are generated only for **watched** IPOs.
 
 ### Query params `GET /ipos`
 - `status`: upcoming|open|closed|listed

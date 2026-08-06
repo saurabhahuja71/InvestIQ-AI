@@ -8,6 +8,7 @@ import 'package:shimmer/shimmer.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/widgets/glass_card.dart';
+import '../../watchlist/presentation/watchlist_providers.dart';
 import 'ipo_providers.dart';
 
 class IpoListScreen extends ConsumerStatefulWidget {
@@ -183,10 +184,21 @@ class _IpoListScreenState extends ConsumerState<IpoListScreen>
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
+    final watchCount = ref.watch(watchlistCountProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('IPO Tracker'),
         actions: [
+          IconButton(
+            tooltip: 'Watchlist',
+            onPressed: () => context.push('/watchlist'),
+            icon: Badge(
+              isLabelVisible: watchCount > 0,
+              label: Text('$watchCount'),
+              child: const Icon(Icons.star_outline_rounded),
+            ),
+          ),
           IconButton(
             tooltip: 'Refresh from exchange',
             onPressed: _onRefresh,
@@ -317,13 +329,15 @@ class _IpoListScreenState extends ConsumerState<IpoListScreen>
   }
 }
 
-class _IpoCard extends StatelessWidget {
+class _IpoCard extends ConsumerWidget {
   const _IpoCard({required this.ipo});
   final Map<String, dynamic> ipo;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
+    final id = ipo['id']?.toString() ?? '';
+    final watched = ref.watch(watchedIpoIdsProvider).contains(id);
     final name = ipo['company_name']?.toString() ?? 'Not Available';
     final symbol = ipo['symbol']?.toString();
     final board = ipo['board']?.toString() ?? 'Not Available';
@@ -337,9 +351,11 @@ class _IpoCard extends StatelessWidget {
     final exchange = ipo['exchange']?.toString();
     final open = ipo['open_date']?.toString() ?? 'Not Available';
     final close = ipo['close_date']?.toString() ?? 'Not Available';
+    final sub = ipo['subscription_total'];
+    final subLabel = sub == null ? null : '${sub}x';
 
     return GlassCard(
-      onTap: () => context.push('/ipos/${ipo['id']}'),
+      onTap: () => context.push('/ipos/$id'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -376,6 +392,35 @@ class _IpoCard extends StatelessWidget {
                   ],
                 ),
               ),
+              IconButton(
+                tooltip: watched ? 'Remove from watchlist' : 'Add to watchlist',
+                onPressed: id.isEmpty
+                    ? null
+                    : () async {
+                        await toggleWatchlist(
+                          ref,
+                          id,
+                          watched,
+                          snapshot: ipo,
+                        );
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                watched
+                                    ? 'Removed from watchlist'
+                                    : 'Added to watchlist',
+                              ),
+                              duration: const Duration(seconds: 1),
+                            ),
+                          );
+                        }
+                      },
+                icon: Icon(
+                  watched ? Icons.star_rounded : Icons.star_outline_rounded,
+                  color: watched ? scheme.primary : scheme.onSurfaceVariant,
+                ),
+              ),
               Chip(
                 label: Text(status),
                 visualDensity: VisualDensity.compact,
@@ -393,6 +438,7 @@ class _IpoCard extends StatelessWidget {
               if (exchange != null) _MetaChip(label: exchange),
               _MetaChip(label: 'Band $band'),
               _MetaChip(label: 'Lot $lot'),
+              if (subLabel != null) _MetaChip(label: 'Sub $subLabel'),
             ],
           ),
           const SizedBox(height: 8),

@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/widgets/glass_card.dart';
+import '../../watchlist/presentation/watchlist_providers.dart';
 import 'ipo_providers.dart';
 
 class IpoDetailScreen extends ConsumerWidget {
@@ -18,12 +19,33 @@ class IpoDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(ipoDetailProvider(id));
+    final watched = ref.watch(watchedIpoIdsProvider).contains(id);
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('IPO Details'),
         actions: [
+          IconButton(
+            tooltip: watched ? 'Remove from watchlist' : 'Add to watchlist',
+            onPressed: () async {
+              final snap = async.asData?.value;
+              await toggleWatchlist(ref, id, watched, snapshot: snap);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      watched ? 'Removed from watchlist' : 'Added to watchlist',
+                    ),
+                  ),
+                );
+              }
+            },
+            icon: Icon(
+              watched ? Icons.star_rounded : Icons.star_outline_rounded,
+              color: watched ? scheme.primary : null,
+            ),
+          ),
           IconButton(
             tooltip: 'Refresh',
             onPressed: () => ref.invalidate(ipoDetailProvider(id)),
@@ -164,16 +186,30 @@ class IpoDetailScreen extends ConsumerWidget {
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () async {
-                        final dio = ref.read(dioProvider);
-                        await dio.post('/ipos/$id/watch');
+                        await toggleWatchlist(
+                          ref,
+                          id,
+                          watched,
+                          snapshot: ipo,
+                        );
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Added to IPO watchlist')),
+                            SnackBar(
+                              content: Text(
+                                watched
+                                    ? 'Removed from watchlist'
+                                    : 'Added to watchlist',
+                              ),
+                            ),
                           );
                         }
                       },
-                      icon: const Icon(Icons.bookmark_add_outlined),
-                      label: const Text('Watch'),
+                      icon: Icon(
+                        watched
+                            ? Icons.star_rounded
+                            : Icons.star_outline_rounded,
+                      ),
+                      label: Text(watched ? 'Watching' : 'Watch'),
                     ),
                   ),
                   const SizedBox(width: 8),
