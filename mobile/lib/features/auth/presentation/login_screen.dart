@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../data/auth_repository.dart';
 import 'auth_controller.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -103,6 +105,149 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  Future<void> _showForgotPasswordDialog() async {
+    final emailCtrl = TextEditingController(text: _email.text.trim());
+    final codeCtrl = TextEditingController();
+    final newPassCtrl = TextEditingController();
+    String? resetToken;
+    String? errorText;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          Future<void> send() async {
+            setDialogState(() {
+              errorText = null;
+            });
+            final email = emailCtrl.text.trim();
+            if (!email.contains('@')) {
+              setDialogState(() => errorText = 'Enter a valid email');
+              return;
+            }
+            try {
+              final token = await ref
+                  .read(authRepositoryProvider)
+                  .forgotPassword(email);
+              setDialogState(() {
+                if (token == null) {
+                  errorText = 'No account found for this email.';
+                } else {
+                  resetToken = token;
+                }
+              });
+            } catch (e) {
+              setDialogState(
+                () => errorText = e.toString().replaceFirst('Bad state: ', ''),
+              );
+            }
+          }
+
+          Future<void> reset() async {
+            setDialogState(() {
+              errorText = null;
+            });
+            if (newPassCtrl.text.length < 8) {
+              setDialogState(() => errorText = 'Min 8 characters');
+              return;
+            }
+            try {
+              await ref.read(authRepositoryProvider).resetPassword(
+                    email: emailCtrl.text.trim(),
+                    token: codeCtrl.text.trim().isEmpty
+                        ? (resetToken ?? '')
+                        : codeCtrl.text.trim(),
+                    newPassword: newPassCtrl.text,
+                  );
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Password updated. Sign in with your new password.'),
+                ),
+              );
+            } catch (e) {
+              setDialogState(
+                () => errorText = e.toString().replaceFirst('Bad state: ', ''),
+              );
+            }
+          }
+
+          final isResetStep = resetToken != null;
+          return AlertDialog(
+            title: Text(isResetStep ? 'Reset password' : 'Forgot password'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (!isResetStep) ...[
+                    const Text(
+                      'Enter your email and a one-time reset code will be created.',
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: emailCtrl,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(
+                        labelText: 'Email',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ] else ...[
+                    const Text(
+                      'Enter the reset code and a new password.',
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: codeCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Reset code',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: newPassCtrl,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'New password (min 8 chars)',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+                  if (errorText != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      errorText!,
+                      style: TextStyle(color: Theme.of(ctx).colorScheme.error),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              if (!isResetStep)
+                FilledButton(
+                  onPressed: send,
+                  child: const Text('Send reset code'),
+                )
+              else
+                FilledButton(
+                  onPressed: reset,
+                  child: const Text('Set new password'),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -196,7 +341,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       validator: (v) =>
                           v != null && v.length >= 8 ? null : 'Min 8 characters',
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 4),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: busy ? null : _showForgotPasswordDialog,
+                        child: const Text('Forgot password?'),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     FilledButton.tonal(
                       onPressed: busy ? null : _submit,
                       child: _loading
@@ -219,6 +372,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
                             color: scheme.onSurfaceVariant,
                           ),
+                    ),
+                    const SizedBox(height: 28),
+                    Text(
+                      'Author: Saurabh Ahuja',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    InkWell(
+                      onTap: () => launchUrl(
+                        Uri.parse('https://onenova.in'),
+                        mode: LaunchMode.externalApplication,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Text(
+                          'onenova.in',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                color: scheme.primary,
+                                fontWeight: FontWeight.w600,
+                                decoration: TextDecoration.underline,
+                              ),
+                        ),
+                      ),
                     ),
                   ],
                 ),

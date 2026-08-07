@@ -49,6 +49,30 @@ class AuthRepository {
     return _persistAuth(res);
   }
 
+  /// Starts a password reset. Returns the one-time reset code when the
+  /// account exists, or null when no matching account was found.
+  Future<String?> forgotPassword(String email) async {
+    final res = await _dio.post('/auth/forgot-password', data: {
+      'email': email.trim(),
+    });
+    final data = unwrapData(res, (d) => d as Map<String, dynamic>);
+    if (data['sent'] != true) return null;
+    return data['reset_token'] as String?;
+  }
+
+  Future<void> resetPassword({
+    required String email,
+    required String token,
+    required String newPassword,
+  }) async {
+    final res = await _dio.post('/auth/reset-password', data: {
+      'email': email.trim(),
+      'token': token.trim(),
+      'new_password': newPassword,
+    });
+    unwrapData(res, (d) => d);
+  }
+
   Future<User> _persistAuth(Response res) async {
     final data = unwrapData(res, (d) => d as Map<String, dynamic>);
     await _storage.saveTokens(

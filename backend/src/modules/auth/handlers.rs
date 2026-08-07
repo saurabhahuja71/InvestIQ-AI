@@ -2,6 +2,7 @@ use axum::extract::State;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use chrono::{Duration, Utc};
+use rand::{rngs::OsRng, RngCore};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 use validator::Validate;
@@ -23,6 +24,8 @@ pub fn router() -> Router<AppState> {
         .route("/logout", post(logout))
         .route("/me", get(me).patch(update_me))
         .route("/change-password", post(change_password))
+        .route("/forgot-password", post(forgot_password))
+        .route("/reset-password", post(reset_password))
         .route("/export", post(export_data))
         .route("/account", axum::routing::delete(delete_account))
 }
@@ -495,6 +498,129 @@ async fn change_password(
 
     tracing::info!(email = %user.email, "password changed; sessions revoked");
     Ok(Json(ApiResponse::ok("password changed")))
+}
+
+/// Public: starts a password reset. No SMTP yet, so the one-time code is
+/// returned in the response for the app to show the user.
+async fn forgot_password(
+    State(state): State<AppState>,
+    Json(body): Json<ForgotPasswordRequest>,
+) -> AppResult<Json<ApiResponse<ForgotPasswordResponse>>> {
+    body.validate()
+        .map_err(|e| AppError::Validation(e.to_string()))?;
+
+    let email = body.email.trim().to_lowercase();
+    let ttl = Duration::minutes(30);
+
+    let user: Option<(Uuid, Option<String>)> =
+        sqlx::query_as(r#"SELECT id, password_hash FROM users WHERE email = $1 AND status = 'active'"#)
+            .bind(&email)
+            .fetch_optional(state.db())
+            .await?;
+
+    let Some((user_id, Some(_))) = user else {
+        return Ok(Json(ApiResponse::ok(ForgotPasswordResponse {
+            sent: false,
+            reset_token: None,
+            expires_in_secs: ttl.num_seconds(),
+        })));
+    };
+
+    let mut buf = [0u8; 32];
+    OsRng.fill_bytes(&mut buf);
+    let token = hex::encode(buf);
+    let token_hash = token_hash(&token);
+
+    sqlx::query(
+        r#"UPDATE password_resets SET used_at = NOW() WHERE user_id = $1 AND used_at IS NULL"#,
+    )
+    .bind(user_id)
+    .execute(state.db())
+    .await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO password_resets (user_id, token_hash, expires_at)
+        VALUES ($1, $2, $3)
+        "#,
+    )
+    .bind(user_id)
+    .bind(&token_hash)
+    .bind(Utc::now() + ttl)
+    .execute(state.db())
+    .await?;
+
+    tracing::info!(email = %email, "password reset code issued");
+    Ok(Json(ApiResponse::ok(ForgotPasswordResponse {
+        sent: true,
+        reset_token: Some(token),
+        expires_in_secs: ttl.num_seconds(),
+    })))
+}
+
+/// Public: exchanges a one-time reset code for a new password.
+async fn reset_password(
+    State(state): State<AppState>,
+    Json(body): Json<ResetPasswordRequest>,
+) -> AppResult<Json<ApiResponse<&'static str>>> {
+    body.validate()
+        .map_err(|e| AppError::Validation(e.to_string()))?;
+
+    let email = body.email.trim().to_lowercase();
+    let token_hash = token_hash(body.token.trim());
+
+    let user_id: Option<Uuid> =
+        sqlx::query_scalar(r#"SELECT id FROM users WHERE email = $1 AND status = 'active'"#)
+            .bind(&email)
+            .fetch_optional(state.db())
+            .await?;
+
+    let Some(user_id) = user_id else {
+        return Err(AppError::Unauthorized("invalid or expired reset code".into()));
+    };
+
+    let valid: Option<bool> = sqlx::query_scalar(
+        r#"
+        SELECT EXISTS (
+            SELECT 1 FROM password_resets
+            WHERE user_id = $1 AND token_hash = $2 AND used_at IS NULL
+              AND expires_at > NOW()
+        )
+        "#,
+    )
+    .bind(user_id)
+    .bind(&token_hash)
+    .fetch_one(state.db())
+    .await?;
+
+    if valid != Some(true) {
+        return Err(AppError::Unauthorized("invalid or expired reset code".into()));
+    }
+
+    let new_hash = hash_password(&body.new_password)?;
+
+    let mut tx = state.db().begin().await?;
+    sqlx::query(r#"UPDATE users SET password_hash = $2, updated_at = NOW() WHERE id = $1"#)
+        .bind(user_id)
+        .bind(&new_hash)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query(
+        r#"UPDATE password_resets SET used_at = NOW() WHERE user_id = $1 AND used_at IS NULL"#,
+    )
+    .bind(user_id)
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query(
+        r#"UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL"#,
+    )
+    .bind(user_id)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+
+    tracing::info!(email = %email, "password reset completed");
+    Ok(Json(ApiResponse::ok("password updated")))
 }
 
 async fn export_data(

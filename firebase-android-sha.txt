@@ -1,0 +1,16 @@
+InvestIQ AI — add these fingerprints in Firebase Console
+Project: investiq-ai-a514e
+Android package: ai.investiq.investiq_ai
+
+Path:
+Firebase Console → Project settings (gear) → Your apps → Android app
+→ Add fingerprint
+
+SHA-1:
+72:15:D2:22:BC:37:77:13:19:E1:E5:A8:DD:51:4C:A5:B3:9E:47:A3
+
+SHA-256:
+18:A4:E6:67:FF:26:B3:59:7E:14:C4:2B:DD:38:38:8B:3C:D3:9A:E4:97:8C:2A:7E:FC:84:3A:7E:D6:A3:73:8C
+
+Keep any existing fingerprints (do not delete the old AC:4E:85:... one).
+After saving, wait 1–2 minutes, then retry Google Sign-In on the phone.

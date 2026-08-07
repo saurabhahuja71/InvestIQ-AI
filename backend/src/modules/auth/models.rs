@@ -48,10 +48,35 @@ pub struct DeleteAccountRequest {
     pub confirm: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct GoogleAuthRequest {
     pub id_token: String,
 }
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct ForgotPasswordRequest {
+    #[validate(email)]
+    pub email: String,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct ResetPasswordRequest {
+    #[validate(email)]
+    pub email: String,
+    pub token: String,
+    #[validate(length(min = 8, max = 128))]
+    pub new_password: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ForgotPasswordResponse {
+    pub sent: bool,
+    /// Present only when the account exists (no SMTP yet, so the reset
+    /// code is returned to the app for now).
+    pub reset_token: Option<String>,
+    pub expires_in_secs: i64,
+}
+
 
 #[derive(Debug, Serialize, FromRow)]
 pub struct UserRow {

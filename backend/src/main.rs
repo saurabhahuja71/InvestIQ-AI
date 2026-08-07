@@ -8,8 +8,8 @@ mod state;
 
 use std::net::SocketAddr;
 
-use axum::http::{HeaderValue, Method};
-use tower_http::cors::{AllowOrigin, CorsLayer};
+use axum::http::{HeaderName, HeaderValue, Method};
+use tower_http::cors::{AllowHeaders, AllowOrigin, CorsLayer};
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -106,7 +106,14 @@ fn build_cors(config: &Config) -> anyhow::Result<CorsLayer> {
             Method::DELETE,
             Method::OPTIONS,
         ])
-        .allow_headers(tower_http::cors::Any)
+        .allow_headers(AllowHeaders::list([
+            HeaderName::from_static("authorization"),
+            HeaderName::from_static("content-type"),
+            HeaderName::from_static("accept"),
+            HeaderName::from_static("origin"),
+            HeaderName::from_static("x-requested-with"),
+            HeaderName::from_static("x-request-id"),
+        ]))
         .allow_credentials(true))
 }
 
