@@ -48,38 +48,52 @@ class IpoDetailScreen extends ConsumerWidget {
           ),
           IconButton(
             tooltip: 'Refresh',
-            onPressed: () => ref.invalidate(ipoDetailProvider(id)),
+            onPressed: () {
+              ref.invalidate(ipoDetailProvider(id));
+              ref.invalidate(ipoScoreProvider(id));
+              ref.invalidate(ipoSubscriptionProvider(id));
+              ref.invalidate(ipoFinancialsProvider(id));
+            },
             icon: const Icon(Icons.refresh),
           ),
         ],
       ),
       body: async.when(
         data: (ipo) => RefreshIndicator(
-          onRefresh: () async => ref.invalidate(ipoDetailProvider(id)),
+          onRefresh: () async {
+            ref.invalidate(ipoDetailProvider(id));
+            ref.invalidate(ipoScoreProvider(id));
+            ref.invalidate(ipoSubscriptionProvider(id));
+            ref.invalidate(ipoFinancialsProvider(id));
+          },
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
               _Header(ipo: ipo),
               const SizedBox(height: 12),
               _Section(
-                title: 'Issue snapshot',
+                title: 'Overview',
+                child: Text(
+                  _str(ipo['description']),
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _Section(
+                title: 'IPO Details',
                 child: Column(
                   children: [
                     _kv(context, 'Exchange', _str(ipo['exchange'])),
-                    _kv(context, 'Status', _str(ipo['status'])),
                     _kv(context, 'Board', _str(ipo['board'])),
+                    _kv(context, 'Status', _str(ipo['status'])),
                     _kv(context, 'Industry', _str(ipo['industry'] ?? ipo['sector'])),
-                    _kv(context, 'Open Date', _str(ipo['open_date'])),
-                    _kv(context, 'Close Date', _str(ipo['close_date'])),
-                    _kv(context, 'Listing Date', _str(ipo['listing_date'])),
-                    _kv(context, 'Allotment Date', _str(ipo['allotment_date'])),
+                    _kv(context, 'Issue Type', _str(ipo['issue_type'])),
                     _kv(context, 'Price Band', _priceBand(ipo)),
                     _kv(context, 'Issue Price', _money(ipo['issue_price'])),
                     _kv(context, 'Lot Size', _str(ipo['lot_size'])),
                     _kv(context, 'Minimum Investment', _money(ipo['min_investment'])),
-                    _kv(context, 'Issue Size (Rs Cr)', _str(ipo['issue_size_cr'])),
                     _kv(context, 'Face Value', _money(ipo['face_value'])),
-                    _kv(context, 'Issue Type', _str(ipo['issue_type'])),
+                    _kv(context, 'Issue Size (Rs Cr)', _str(ipo['issue_size_cr'])),
                     _kv(context, 'Registrar', _str(ipo['registrar'])),
                     _kv(context, 'Lead Managers', _leadManagers(ipo['lead_managers'])),
                     _kv(context, 'Data source', _str(ipo['source'] ?? 'nse')),
@@ -89,34 +103,65 @@ class IpoDetailScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 12),
               _Section(
-                title: 'Subscription',
+                title: 'Important Dates',
                 child: Column(
                   children: [
-                    _kv(context, 'Total', _times(ipo['subscription_total'])),
-                    _kv(context, 'QIB', _times(ipo['subscription_qib'])),
-                    _kv(context, 'NII', _times(ipo['subscription_nii'])),
-                    _kv(context, 'Retail', _times(ipo['subscription_retail'])),
+                    _kv(context, 'Open Date', _str(ipo['open_date'])),
+                    _kv(context, 'Close Date', _str(ipo['close_date'])),
+                    _kv(context, 'Allotment Date', _str(ipo['allotment_date'])),
+                    _kv(context, 'Refund Date', _str(ipo['refund_date'])),
+                    _kv(context, 'Listing Date', _str(ipo['listing_date'])),
                   ],
                 ),
               ),
               const SizedBox(height: 12),
-              _GmpCard(ipo: ipo, scheme: scheme),
-              const SizedBox(height: 12),
               _Section(
-                title: 'Financial highlights',
-                child: _Financials(raw: ipo['financials']),
+                title: 'Subscription',
+                child: _SubscriptionSection(id: id),
               ),
               const SizedBox(height: 12),
               _Section(
-                title: 'Business description',
-                child: Text(
-                  _str(ipo['description']),
-                  style: Theme.of(context).textTheme.bodyMedium,
+                title: 'Financial Performance',
+                child: _FinancialsSection(id: id),
+              ),
+              const SizedBox(height: 12),
+              _Section(
+                title: 'Growth Analysis',
+                child: _GrowthSection(id: id),
+              ),
+              const SizedBox(height: 12),
+              _Section(
+                title: 'Valuation',
+                child: _ValuationSection(id: id),
+              ),
+              const SizedBox(height: 12),
+              _Section(
+                title: 'InvestIQ Score',
+                child: _ScoreSection(id: id),
+              ),
+              if (_hasList(ipo['pros']) || _hasList(ipo['risks'])) ...[
+                const SizedBox(height: 12),
+                _Section(
+                  title: 'Risk Factors',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (_hasList(ipo['pros'])) ...[
+                        Text('Pros', style: Theme.of(context).textTheme.titleSmall),
+                        ..._listItems(ipo['pros']),
+                        const SizedBox(height: 12),
+                      ],
+                      if (_hasList(ipo['risks'])) ...[
+                        Text('Risks', style: Theme.of(context).textTheme.titleSmall),
+                        ..._listItems(ipo['risks']),
+                      ],
+                    ],
+                  ),
                 ),
-              ),
+              ],
               const SizedBox(height: 12),
               _Section(
-                title: 'Documents & links',
+                title: 'Official Documents',
                 child: Column(
                   children: [
                     _LinkTile(
@@ -134,26 +179,6 @@ class IpoDetailScreen extends ConsumerWidget {
                   ],
                 ),
               ),
-              if (_hasList(ipo['pros']) || _hasList(ipo['risks'])) ...[
-                const SizedBox(height: 12),
-                _Section(
-                  title: 'Pros & risks',
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (_hasList(ipo['pros'])) ...[
-                        Text('Pros', style: Theme.of(context).textTheme.titleSmall),
-                        ..._listItems(ipo['pros']),
-                        const SizedBox(height: 12),
-                      ],
-                      if (_hasList(ipo['risks'])) ...[
-                        Text('Risks', style: Theme.of(context).textTheme.titleSmall),
-                        ..._listItems(ipo['risks']),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
               const SizedBox(height: 12),
               if (ipo['ai_summary'] != null)
                 _Section(
@@ -245,21 +270,36 @@ class IpoDetailScreen extends ConsumerWidget {
     return s;
   }
 
+  static String _num(dynamic v) {
+    if (v == null) return _na;
+    final d = double.tryParse('$v');
+    if (d == null) return v.toString();
+    if (d == d.roundToDouble()) return d.toInt().toString();
+    var s = d.toStringAsFixed(2);
+    s = s.replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
+    return s;
+  }
+
   static String _money(dynamic v) {
     if (v == null) return _na;
-    return 'Rs $v';
+    return 'Rs ${_num(v)}';
   }
 
   static String _times(dynamic v) {
     if (v == null) return _na;
-    return '${v}x';
+    return '${_num(v)}x';
+  }
+
+  static String _pct(dynamic v) {
+    if (v == null) return _na;
+    return '${_num(v)}%';
   }
 
   static String _priceBand(Map<String, dynamic> ipo) {
     final low = ipo['price_band_low'];
     final high = ipo['price_band_high'];
     if (low == null && high == null) return _na;
-    return 'Rs ${low ?? '-'} - Rs ${high ?? '-'}';
+    return 'Rs ${_num(low)} - Rs ${_num(high)}';
   }
 
   static String _leadManagers(dynamic raw) {
@@ -487,115 +527,587 @@ class _Section extends StatelessWidget {
   }
 }
 
-class _GmpCard extends StatelessWidget {
-  const _GmpCard({required this.ipo, required this.scheme});
-  final Map<String, dynamic> ipo;
-  final ColorScheme scheme;
+class _InlineLoading extends StatelessWidget {
+  const _InlineLoading();
 
   @override
   Widget build(BuildContext context) {
-    final gmp = ipo['gmp'] as Map<String, dynamic>?;
-    final available = gmp?['available'] == true || gmp?['value'] != null;
-    return GlassCard(
-      borderColor: Colors.amber.withValues(alpha: 0.6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.warning_amber_rounded, color: Colors.amber),
-              const SizedBox(width: 8),
-              Text(
-                'Grey Market Premium',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.amber.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Text(
-                  'UNOFFICIAL',
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            available ? 'Rs ${gmp?['value'] ?? ipo['gmp_value']}' : 'Not Available',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: available ? null : scheme.outline,
-                ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            available
-                ? (gmp?['disclaimer']?.toString() ?? AppConstants.gmpDisclaimer)
-                : 'NSE India does not publish GMP. InvestIQ does not invent grey-market figures.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-          ),
-        ],
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 16),
+      child: Center(
+        child: SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
       ),
     );
   }
 }
 
-class _Financials extends StatelessWidget {
-  const _Financials({required this.raw});
-  final dynamic raw;
+class _InlineError extends StatelessWidget {
+  const _InlineError({required this.message, required this.onRetry});
+  final String message;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
-    if (raw is! Map || raw.isEmpty) {
-      return Text(
-        'Not Available',
-        style: TextStyle(color: Theme.of(context).colorScheme.outline),
-      );
-    }
-    final map = Map<String, dynamic>.from(raw);
-    // Prefer human labels; skip raw URL keys shown as links elsewhere
-    final entries = map.entries.where((e) {
-      final k = e.key.toLowerCase();
-      return !k.endsWith('_url') && e.value != null && '${e.value}'.trim().isNotEmpty;
-    }).toList();
-    if (entries.isEmpty) {
-      return Text(
-        'Structured financials are Not Available from NSE. Use the ratios / prospectus links when present.',
-        style: Theme.of(context).textTheme.bodySmall,
-      );
-    }
-    return Column(
-      children: entries
-          .map(
-            (e) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: Text(_label(e.key))),
-                  Expanded(
-                    child: Text(
-                      '${e.value}',
-                      textAlign: TextAlign.end,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
-              ),
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            message,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.error,
+                ),
+          ),
+        ),
+        TextButton(onPressed: onRetry, child: const Text('Retry')),
+      ],
+    );
+  }
+}
+
+class _SubscriptionSection extends ConsumerWidget {
+  const _SubscriptionSection({required this.id});
+  final String id;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(ipoSubscriptionProvider(id));
+    return async.when(
+      data: (d) {
+        final map = Map<String, dynamic>.from(d);
+        if (map['available'] != true) {
+          return Text(
+            'No subscription data yet',
+            style: TextStyle(color: Theme.of(context).colorScheme.outline),
+          );
+        }
+        return Column(
+          children: [
+            IpoDetailScreen._kv(context, 'Overall', IpoDetailScreen._times(map['overall'])),
+            IpoDetailScreen._kv(context, 'QIB', IpoDetailScreen._times(map['qib'])),
+            IpoDetailScreen._kv(context, 'NII', IpoDetailScreen._times(map['nii'])),
+            IpoDetailScreen._kv(context, 'Retail', IpoDetailScreen._times(map['retail'])),
+            IpoDetailScreen._kv(context, 'Employee', IpoDetailScreen._times(map['employee'])),
+            IpoDetailScreen._kv(context, 'Shareholder', IpoDetailScreen._times(map['shareholder'])),
+            IpoDetailScreen._kv(
+              context,
+              'Status',
+              map['is_final'] == true ? 'Final' : 'Live',
             ),
-          )
-          .toList(),
+            IpoDetailScreen._kv(context, 'Source', IpoDetailScreen._str(map['source_type'] ?? map['source'])),
+            IpoDetailScreen._kv(context, 'Updated at', IpoDetailScreen._str(map['updated_at'])),
+          ],
+        );
+      },
+      loading: () => const _InlineLoading(),
+      error: (e, _) => _InlineError(
+        message: '$e',
+        onRetry: () => ref.invalidate(ipoSubscriptionProvider(id)),
+      ),
+    );
+  }
+}
+
+class _FinancialsSection extends ConsumerWidget {
+  const _FinancialsSection({required this.id});
+  final String id;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(ipoFinancialsProvider(id));
+    return async.when(
+      data: (d) {
+        final map = Map<String, dynamic>.from(d);
+        final periods = (map['periods'] as List? ?? [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+        if (map['available'] != true || periods.isEmpty) {
+          return Text(
+            'No structured financial data yet. Use the official documents '
+            'section for the prospectus.',
+            style: TextStyle(color: Theme.of(context).colorScheme.outline),
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final p in periods) ...[
+              if (p != periods.first) const SizedBox(height: 16),
+              _PeriodCard(period: p),
+            ],
+          ],
+        );
+      },
+      loading: () => const _InlineLoading(),
+      error: (e, _) => _InlineError(
+        message: '$e',
+        onRetry: () => ref.invalidate(ipoFinancialsProvider(id)),
+      ),
+    );
+  }
+}
+
+class _PeriodCard extends StatelessWidget {
+  const _PeriodCard({required this.period});
+  final Map<String, dynamic> period;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = [
+      period['period']?.toString(),
+      if (period['audited'] == true) 'Audited',
+    ].where((e) => e != null && e.isNotEmpty).join(' · ');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+        const SizedBox(height: 4),
+        _kv(context, 'Revenue', _money(period['revenue'])),
+        _kv(context, 'Revenue growth', _pct(period['revenue_growth_pct'])),
+        _kv(context, 'EBITDA', _money(period['ebitda'])),
+        _kv(context, 'EBITDA margin', _pct(period['ebitda_margin_pct'])),
+        _kv(context, 'PAT', _money(period['pat'])),
+        _kv(context, 'PAT growth', _pct(period['pat_growth_pct'])),
+        _kv(context, 'EPS', _money(period['eps'])),
+        _kv(context, 'P/E ratio', _times(period['pe_ratio'])),
+        _kv(context, 'ROE', _pct(period['roe_pct'])),
+        _kv(context, 'ROCE', _pct(period['roce_pct'])),
+        _kv(context, 'Debt', _money(period['debt'])),
+        _kv(context, 'Debt / Equity', _str(period['debt_to_equity'])),
+      ],
     );
   }
 
-  String _label(String key) => key.replaceAll('_', ' ');
+  static String _str(dynamic v) =>
+      v == null ? IpoDetailScreen._na : IpoDetailScreen._num(v);
+  static String _money(dynamic v) =>
+      v == null ? IpoDetailScreen._na : 'Rs ${IpoDetailScreen._num(v)}';
+  static String _pct(dynamic v) =>
+      v == null ? IpoDetailScreen._na : '${IpoDetailScreen._num(v)}%';
+  static String _times(dynamic v) =>
+      v == null ? IpoDetailScreen._na : '${IpoDetailScreen._num(v)}x';
+  static Widget _kv(BuildContext context, String k, String v) {
+    return IpoDetailScreen._kv(context, k, v);
+  }
+}
+
+class _GrowthSection extends ConsumerWidget {
+  const _GrowthSection({required this.id});
+  final String id;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(ipoFinancialsProvider(id));
+    return async.when(
+      data: (d) {
+        final map = Map<String, dynamic>.from(d);
+        final growth = map['growth'] is Map
+            ? Map<String, dynamic>.from(map['growth'] as Map)
+            : null;
+        if (growth == null) {
+          return Text(
+            'Growth analysis requires financial data.',
+            style: TextStyle(color: Theme.of(context).colorScheme.outline),
+          );
+        }
+        return Column(
+          children: [
+            for (final key in const ['revenue', 'pat', 'eps'])
+              if (growth[key] is Map) ...[
+                _GrowthRow(
+                  metricKey: key,
+                  metric: Map<String, dynamic>.from(growth[key] as Map),
+                ),
+                const SizedBox(height: 8),
+              ],
+          ],
+        );
+      },
+      loading: () => const _InlineLoading(),
+      error: (e, _) => _InlineError(
+        message: '$e',
+        onRetry: () => ref.invalidate(ipoFinancialsProvider(id)),
+      ),
+    );
+  }
+}
+
+class _GrowthRow extends StatelessWidget {
+  const _GrowthRow({required this.metricKey, required this.metric});
+  final String metricKey;
+  final Map<String, dynamic> metric;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = metric['label']?.toString() ?? metricKey.toUpperCase();
+    final latest = metric['latest_value'];
+    final period = metric['latest_period']?.toString();
+    final yoy = metric['yoy_growth_pct'];
+    final cagr = metric['cagr_pct'];
+    final years = metric['cagr_years'];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            if (latest != null)
+              Text(
+                IpoDetailScreen._money(latest),
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+          ],
+        ),
+        if (period != null)
+          Text(
+            'Latest: $period',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        const SizedBox(height: 4),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            _GrowthChip(
+              label: 'YoY',
+              value: yoy == null ? null : IpoDetailScreen._pct(yoy),
+            ),
+            _GrowthChip(
+              label: 'CAGR',
+              value: cagr == null
+                  ? null
+                  : '${IpoDetailScreen._pct(cagr)}${years != null ? ' (${IpoDetailScreen._num(years)} yrs)' : ''}',
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _GrowthChip extends StatelessWidget {
+  const _GrowthChip({required this.label, required this.value});
+  final String label;
+  final String? value;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: scheme.primaryContainer.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        value == null ? '$label: Not Available' : '$label $value',
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+      ),
+    );
+  }
+}
+
+class _ValuationSection extends ConsumerWidget {
+  const _ValuationSection({required this.id});
+  final String id;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(ipoFinancialsProvider(id));
+    return async.when(
+      data: (d) {
+        final map = Map<String, dynamic>.from(d);
+        final v = map['valuation'] is Map
+            ? Map<String, dynamic>.from(map['valuation'] as Map)
+            : null;
+        if (v == null || v['available'] != true) {
+          return Text(
+            'Valuation is not available yet.',
+            style: TextStyle(color: Theme.of(context).colorScheme.outline),
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _kv(context, 'P/E ratio', _str(v['pe_ratio'])),
+            _kv(context, 'EPS', _money(v['eps'])),
+            _kv(context, 'Issue price', _money(v['issue_price'])),
+            _kv(context, 'Implied P/E', _times(v['implied_pe'])),
+            _kv(context, 'Sector P/E', _str(v['sector_pe'])),
+            _kv(context, 'Premium / Discount', _pct(v['premium_discount_pct'])),
+            if (v['note'] != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                '${v['note']}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ],
+        );
+      },
+      loading: () => const _InlineLoading(),
+      error: (e, _) => _InlineError(
+        message: '$e',
+        onRetry: () => ref.invalidate(ipoFinancialsProvider(id)),
+      ),
+    );
+  }
+
+  static String _str(dynamic v) =>
+      v == null ? IpoDetailScreen._na : IpoDetailScreen._num(v);
+  static String _money(dynamic v) =>
+      v == null ? IpoDetailScreen._na : 'Rs ${IpoDetailScreen._num(v)}';
+  static String _times(dynamic v) =>
+      v == null ? IpoDetailScreen._na : '${IpoDetailScreen._num(v)}x';
+  static String _pct(dynamic v) =>
+      v == null ? IpoDetailScreen._na : '${IpoDetailScreen._num(v)}%';
+  static Widget _kv(BuildContext context, String k, String v) =>
+      IpoDetailScreen._kv(context, k, v);
+}
+
+class _ScoreSection extends ConsumerWidget {
+  const _ScoreSection({required this.id});
+  final String id;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(ipoScoreProvider(id));
+    return async.when(
+      data: (d) => _ScoreBody(data: Map<String, dynamic>.from(d)),
+      loading: () => const _InlineLoading(),
+      error: (e, _) => _InlineError(
+        message: '$e',
+        onRetry: () => ref.invalidate(ipoScoreProvider(id)),
+      ),
+    );
+  }
+}
+
+class _ScoreBody extends StatelessWidget {
+  const _ScoreBody({required this.data});
+  final Map<String, dynamic> data;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final total = data['total'];
+    final maxPoints = (data['max_points'] as num?)?.toInt() ?? 100;
+    final version = data['methodology_version']?.toString();
+    final dq = data['data_quality'] is Map
+        ? Map<String, dynamic>.from(data['data_quality'] as Map)
+        : <String, dynamic>{};
+    final overall = dq['overall']?.toString() ?? 'insufficient';
+    final missing = (dq['missing'] as List?) ?? const [];
+    final components = (data['components'] as List?)
+            ?.map((e) => Map<String, dynamic>.from(e as Map))
+            .toList() ??
+        [];
+    final positives = (data['positive_factors'] as List?) ?? const [];
+    final concerns = (data['concerns'] as List?) ?? const [];
+    final disclaimer = data['disclaimer']?.toString();
+
+    final score = total == null ? null : IpoDetailScreen._num(total);
+    final hasScore = score != null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(
+              hasScore ? score : '—',
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: hasScore ? scheme.primary : scheme.outline,
+                  ),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '/ $maxPoints',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: scheme.outline,
+                  ),
+            ),
+            const Spacer(),
+            _QualityChip(overall: overall),
+          ],
+        ),
+        const SizedBox(height: 12),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: LinearProgressIndicator(
+            value: hasScore ? (double.tryParse('$total') ?? 0) / 100 : 0,
+            minHeight: 8,
+            backgroundColor: scheme.surfaceContainerHighest,
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (version != null)
+          Text(
+            'Methodology v$version · fundamentals-based, deterministic',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+          ),
+        if (missing.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Not scored (no data): ${missing.join(', ')}',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: scheme.outline,
+                ),
+          ),
+        ],
+        if (components.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          for (final c in components) _ComponentRow(component: c),
+        ],
+        if (positives.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text(
+            'Positive factors',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: 4),
+          ...positives.map((e) => Text('• $e')),
+        ],
+        if (concerns.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text(
+            'Concerns',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: 4),
+          ...concerns.map((e) => Text('• $e')),
+        ],
+        if (disclaimer != null && disclaimer.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text(
+            disclaimer,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _QualityChip extends StatelessWidget {
+  const _QualityChip({required this.overall});
+  final String overall;
+
+  @override
+  Widget build(BuildContext context) {
+    final (color, label) = switch (overall) {
+      'complete' => (Colors.green, 'Complete data'),
+      'partial' => (Colors.amber.shade700, 'Partial data'),
+      _ => (Colors.redAccent, 'Insufficient data'),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
+class _ComponentRow extends StatelessWidget {
+  const _ComponentRow({required this.component});
+  final Map<String, dynamic> component;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final label = component['label']?.toString() ?? '—';
+    final maxPts = (component['max_points'] as num?)?.toInt() ?? 0;
+    final score = component['score'];
+    final status = component['status']?.toString() ?? 'insufficient_data';
+    final explanation = component['explanation']?.toString();
+    final scored = score != null;
+    final icon = scored
+        ? Icons.check_circle_outline
+        : Icons.remove_circle_outline;
+    final iconColor = scored ? scheme.primary : scheme.outline;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: iconColor),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                if (explanation != null && explanation.isNotEmpty)
+                  Text(
+                    explanation,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                scored ? '${IpoDetailScreen._num(score)}/$maxPts' : '—/$maxPts',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              Text(
+                status == 'scored' ? 'Scored' : 'No data',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: scored ? scheme.primary : scheme.outline,
+                    ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _LinkTile extends StatelessWidget {

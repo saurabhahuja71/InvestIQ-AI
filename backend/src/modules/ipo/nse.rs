@@ -65,6 +65,8 @@ pub struct NseIpoDetail {
     pub subscription_retail: Option<Decimal>,
     pub subscription_qib: Option<Decimal>,
     pub subscription_nii: Option<Decimal>,
+    pub subscription_employee: Option<Decimal>,
+    pub subscription_shareholder: Option<Decimal>,
     pub issue_info: serde_json::Map<String, Value>,
 }
 
@@ -431,6 +433,10 @@ fn parse_detail(v: &Value) -> NseIpoDetail {
             } else if cat.starts_with("non institutional investors") && !cat.contains("bid amount")
             {
                 detail.subscription_nii = times.or(detail.subscription_nii);
+            } else if cat.contains("employee") {
+                detail.subscription_employee = times.or(detail.subscription_employee);
+            } else if cat.contains("shareholder") || cat.contains("share holders") {
+                detail.subscription_shareholder = times.or(detail.subscription_shareholder);
             }
         }
     }
@@ -712,6 +718,17 @@ mod tests {
         let (lo, hi) = parse_price_band(Some("Rs. 560 to Rs. 590 per Equity Share"));
         assert_eq!(lo.unwrap().to_string(), "560");
         assert_eq!(hi.unwrap().to_string(), "590");
+    }
+
+    #[test]
+    fn cleans_quoted_rupee_values() {
+        // NSE issueInfo amount values arrive as JSON strings containing quotes.
+        assert_eq!(
+            json_to_clean_string(&Value::String("\"Rs. 2,00,000\"".into())),
+            "Rs. 2,00,000"
+        );
+        assert_eq!(json_to_clean_string(&Value::String("94 Equity Shares".into())), "94 Equity Shares");
+        assert_eq!(json_to_clean_string(&Value::Null), "");
     }
 
     #[test]

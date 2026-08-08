@@ -18,6 +18,10 @@ class AppConstants {
     final raw = <String>[
       apiBaseUrl,
       ...apiFallbackBaseUrls.split(','),
+      // GCP static host serving the InvestIQ API (docs/15-gcp-api-host.md).
+      'http://136.67.97.86:8080',
+      // onenova.in tunnel — website only until proxied to the API.
+      'https://onenova.in',
       // Always try common local-dev endpoints last.
       'http://127.0.0.1:8080',
       'http://10.0.2.2:8080',
@@ -39,7 +43,4 @@ class AppConstants {
   static const investmentDisclaimer =
       'This is not financial advice. Past performance does not guarantee future results. '
       'InvestIQ AI does not provide guaranteed returns. Markets involve risk of loss.';
-
-  static const gmpDisclaimer =
-      'Grey Market Premium (GMP) is unofficial and not endorsed by any exchange or regulator.';
 }

@@ -6,8 +6,8 @@
 
 | Field | Value |
 |-------|--------|
-| **Last updated** | 2026-08-06 |
-| **Product phase** | Milestone 3 — Watchlist & IPO Alerts (M1 Google Auth + M2 IPO Tracker done) |
+| **Last updated** | 2026-08-08 |
+| **Product phase** | Milestone 4 — IPO Intelligence (research gate) — M1/M2/M3 done |
 | **Overall completion** | ~78% toward Play Store MVP |
 | **Release readiness** | **~65%** |
 | **Default branch** | `main` |
@@ -28,6 +28,8 @@ Other modules (portfolio, journal, AI) remain as before — **not** modified for
 
 **Still not store-ready:** Firebase/Google OAuth credentials; Android SDK/signing; hosted privacy policy; **FCM push delivery** (in-app notifications only for IPO alerts).
 
+**Milestone 4 (IPO Intelligence) is at a research gate:** backend scaffolding (subscription history, GMP, financials, score endpoints) exists but **provider integration is deliberately frozen** until provider selection is approved. Research completed → `docs/IPO_DATA_PROVIDER_RESEARCH.md`. **Confirmed (2026-08-08): IPO Guru free API** (300 req/day, 15/min) covers IPO details + subscription + GMP at ₹0 with commercial use + attribution — selected as the launch primary for the free app. Key compliance note: NSE public feeds are **not** compliant for a commercial Play Store app without a formal NSE Data & Analytics license; GMP must come from the unofficial provider (IPO Guru); financials primary source is the official RHP.
+
 ---
 
 ## 2. Completed features
@@ -35,8 +37,9 @@ Other modules (portfolio, journal, AI) remain as before — **not** modified for
 ### Documentation & ops
 - [x] Architecture, schema, API, wireframes, roadmap, deploy docs
 - [x] **Podman Compose** (`compose.yml`) + dnf install script, CI workflow, `.env.example`
-- [x] Migrations: init + MVP + **google_auth** + **`20240805000000_ipo_live_source`** (drop seeds, NSE sync columns)
+- [x] Migrations: init + MVP + **google_auth** + **`20240805000000_ipo_live_source`** (drop seeds, NSE sync columns) + **`20250808000000_ipo_intelligence`** (M4 subscription/GMP/financials/score tables)
 - [x] **IPO data provider doc** (`docs/11-ipo-data-provider.md`)
+- [x] **Milestone 4 provider research** (`docs/IPO_DATA_PROVIDER_RESEARCH.md`) — IPO Guru / IPOAlerts / IPONotify + official NSE/BSE/SEBI/registrar sources; comparison table; dev/production/fallback recommendations; proposed architecture. **Integration pending approval.**
 - [x] **API design** updated for `/watchlist` and `/alerts` (Milestone 3)
 - [x] **Offline container images** on GitHub Release `container-images-v1` + load/export scripts
 
@@ -53,7 +56,15 @@ Other modules (portfolio, journal, AI) remain as before — **not** modified for
 - [x] Legacy aliases: `GET /ipos/watchlist`, `POST|DELETE /ipos/{id}/watch`, `POST /notifications/sync-ipo-events`
 - [x] Portfolio / journal / AI / price alerts unchanged
 - [x] Redis **rate limit** middleware on `/api/v1`
-- [x] Unit tests: XIRR, CAGR, allotment, crypto, AI, NSE parsers, **IPO alert logic** (**19 tests**)
+- [x] Unit tests: XIRR, CAGR, allotment, crypto, AI, NSE parsers, **IPO alert logic**, **M4 score + parsers** (**37 tests**)
+
+### Milestone 4 backend (scaffolded, integration frozen)
+- [x] Migration `20250808000000_ipo_intelligence`: subscription snapshots + history, GMP + history, financials, score cache, `data_sources` metadata (empty tables are the honest default)
+- [x] `ipo_intel` module: subscription/history, gmp/history, financials, score endpoints; transparent scoring methodology (`logic.rs`) + tests
+- [x] NSE sync captures **official subscription bid-details** to daily history + latest snapshot (skips all-NULL rows)
+- [x] `investment_requirements` on IPO detail (lot × price; NSE max caps; SEBI ₹2L NII floor as labelled regulatory constant)
+- [x] `/data-sources` endpoint with per-IPO freshness timestamps
+- [ ] **Provider integration — frozen pending approval** (see `docs/IPO_DATA_PROVIDER_RESEARCH.md`)
 
 ### Mobile
 - [x] Material 3 shell, auth, IPO, portfolio, journal, AI, settings
@@ -97,6 +108,7 @@ Other modules (portfolio, journal, AI) remain as before — **not** modified for
 | Severity | Issue |
 |----------|--------|
 | High | Google login needs real `FIREBASE_PROJECT_ID` + client IDs |
+| High | **NSE public feeds not compliant for commercial Play Store app** without NSE Data & Analytics license or a licensed aggregator (see `docs/IPO_DATA_PROVIDER_RESEARCH.md`) |
 | Medium | NSE may 403; sync fails soft and serves last DB snapshot |
 | Medium | Allotment engine is **indicative**, not registrar-authoritative |
 | Medium | Logo, website, industry, description, structured financials, GMP often **Not Available** from NSE |
@@ -138,7 +150,7 @@ Other modules (portfolio, journal, AI) remain as before — **not** modified for
 | Target | Status |
 |--------|--------|
 | `cargo check` | Pass |
-| `cargo test` | Pass (**19 tests**) |
+| `cargo test` | Pass (**37 tests**) |
 | `flutter analyze` (M3 modules) | **Pass** |
 | `flutter test` | Environment-sensitive (proxy WebSocket 502 on this host) |
 | Android debug/release | Blocked without SDK |
@@ -149,9 +161,10 @@ Other modules (portfolio, journal, AI) remain as before — **not** modified for
 
 | Suite | Est. coverage | Status |
 |-------|---------------|--------|
-| Rust unit (analytics, allotment, crypto, AI, NSE, **alert logic**) | Core paths | Pass (19) |
+| Rust unit (analytics, allotment, crypto, AI, NSE, **alert logic**, **M4 score/parsers**) | Core paths | Pass (37) |
 | Manual IPO API smoke (2026-08-05) | List/search/detail/sync | Pass |
 | Milestone 3 unit (alert evaluate + prefs merge) | Pure logic | Pass |
+| Milestone 4 unit (score, investment requirements, GMP parsing) | Pure logic | Pass |
 | Rust integration | ~0% | Missing |
 | Flutter unit/widget | Low | Env-blocked on host |
 | **Target ≥ 80%** | Not met | Next priority |
@@ -173,8 +186,9 @@ Other modules (portfolio, journal, AI) remain as before — **not** modified for
 
 | Gate | Ready? |
 |------|--------|
-| IPO Tracker production data path | **Yes (NSE-backed)** |
+| IPO Tracker production data path | **Yes (NSE-backed)** ⚠️ NSE license posture TBD for commercial store |
 | Watchlist + IPO alerts | **Yes (in-app)** |
+| Milestone 4 data providers | **Research done — integration frozen pending approval** |
 | Four MVP modules usable | **Yes (local full stack)** |
 | Google Sign-In E2E | **Code ready; needs Firebase credentials** |
 | Backend hardened enough for staging | Mostly |
@@ -188,10 +202,11 @@ Other modules (portfolio, journal, AI) remain as before — **not** modified for
 
 1. **Operator:** Firebase project + secrets for Google login E2E  
 2. Install Android SDK → debug APK + release AAB  
-3. Integration tests (auth, watchlist, alerts/sync)  
-4. FCM send path for real push on IPO events  
-5. Privacy policy page + in-app links  
-6. Staging deploy smoke script  
+3. **Milestone 4 decision:** ✅ IPO Guru free confirmed as launch provider (GMP + subscription + IPO details, commercial use + attribution). Remaining: **NSE posture** (license vs aggregator), **financials path** (RHP ingestion vs defer), written IPO Guru license confirmation — per `docs/IPO_DATA_PROVIDER_RESEARCH.md`  
+4. Integration tests (auth, watchlist, alerts/sync)  
+5. FCM send path for real push on IPO events  
+6. Privacy policy page + in-app links  
+7. Staging deploy smoke script  
 
 ---
 
@@ -208,6 +223,7 @@ Other modules (portfolio, journal, AI) remain as before — **not** modified for
 | 2026-08-03 | **Google Auth complete (code):** FlutterFire scaffolding; blocked on operator Firebase secrets |
 | 2026-08-05 | **Milestone 2:** live NSE IPO sync, Redis list cache, production Flutter IPO list/detail, provider docs |
 | 2026-08-06 | **Milestone 3:** `/watchlist` + `/alerts` APIs, watchlist-scoped IPO alert evaluation, Flutter star/badge/watchlist page/alert prefs, offline cache |
+| 2026-08-08 | **Milestone 4 scaffolding:** subscription/GMP/financials/score endpoints + scoring logic, `investment_requirements`, `data-sources` freshness, 37 tests. **Provider research done** (`docs/IPO_DATA_PROVIDER_RESEARCH.md`); integration frozen pending provider + NSE-license approval |
 
 ---
 

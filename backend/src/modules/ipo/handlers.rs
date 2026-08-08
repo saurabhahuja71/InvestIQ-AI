@@ -19,7 +19,6 @@ const DETAIL_SELECT: &str = r#"
                i.exchange, i.registrar, COALESCE(i.lead_managers, '[]'::jsonb) AS lead_managers,
                i.subscription_total, i.subscription_retail, i.subscription_qib, i.subscription_nii,
                i.listing_open, i.listing_close,
-               i.gmp_value, i.gmp_updated_at, i.gmp_disclaimer,
                COALESCE(i.financials, '{}'::jsonb) AS financials,
                COALESCE(i.pros, '[]'::jsonb) AS pros,
                COALESCE(i.risks, '[]'::jsonb) AS risks,
@@ -40,6 +39,8 @@ pub fn router() -> Router<AppState> {
         .route("/{id}/watch", post(add_watch).delete(remove_watch))
         .route("/{id}/ai-summary", get(ai_summary))
         .route("/{id}/allotment-check", post(allotment_check))
+        // Milestone 4 — IPO Intelligence (subscription / gmp / financials / score)
+        .merge(crate::modules::ipo_intel::handlers::router())
 }
 
 async fn sync_ipos(State(state): State<AppState>) -> AppResult<Json<ApiResponse<serde_json::Value>>> {
@@ -118,8 +119,6 @@ async fn list_ipos(
                i.listing_date,
                i.exchange,
                i.subscription_total,
-               i.gmp_value,
-               TRUE AS gmp_unofficial,
                c.logo_url,
                i.source,
                i.source_synced_at
@@ -258,7 +257,7 @@ async fn watchlist(
         SELECT i.id, c.name AS company_name, c.symbol, i.board::text, i.status::text,
                i.price_band_low, i.price_band_high, i.issue_price, i.lot_size, i.min_investment,
                i.open_date, i.close_date, i.listing_date, i.exchange, i.subscription_total,
-               i.gmp_value, TRUE AS gmp_unofficial, c.logo_url, i.source, i.source_synced_at
+               c.logo_url, i.source, i.source_synced_at
         FROM ipo_watchlist w
         JOIN ipos i ON i.id = w.ipo_id
         JOIN companies c ON c.id = i.company_id

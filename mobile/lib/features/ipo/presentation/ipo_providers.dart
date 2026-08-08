@@ -164,6 +164,73 @@ final ipoDetailProvider =
   }
 });
 
+Future<Map<String, dynamic>> _fetchIntel(
+  Ref ref,
+  String path,
+  String cacheKey,
+) async {
+  final dio = ref.watch(dioProvider);
+  final cache = ref.watch(offlineCacheProvider);
+  try {
+    final res = await dio.get(path);
+    final data = unwrapData(res, (d) => Map<String, dynamic>.from(d as Map));
+    await cache.putJson(cacheKey, data);
+    return data;
+  } on DioException catch (e) {
+    final cached = cache.getJson(cacheKey);
+    if (cached is Map) {
+      return Map<String, dynamic>.from(cached);
+    }
+    // 404 = intelligence for this IPO is not computed yet. Signal "no data"
+    // so sections render their Not Available state instead of an error.
+    if (e.response?.statusCode == 404) {
+      return <String, dynamic>{};
+    }
+    throw AppException.fromDio(e);
+  }
+}
+
+/// InvestIQ IPO Score (fundamentals-driven) for an IPO.
+final ipoScoreProvider =
+    FutureProvider.family<Map<String, dynamic>, String>((ref, id) {
+  return _fetchIntel(ref, '/ipos/$id/score', 'ipo_score:$id');
+});
+
+/// Live subscription data (NSE official feed) for an IPO.
+///
+/// Falls back to the live subscription fields on the IPO detail payload when
+/// the intel endpoint has no snapshot yet (e.g. older API deployments).
+final ipoSubscriptionProvider =
+    FutureProvider.family<Map<String, dynamic>, String>((ref, id) async {
+  final sub = await _fetchIntel(
+    ref,
+    '/ipos/$id/subscription',
+    'ipo_subscription:$id',
+  );
+  if (sub['available'] == true && sub['overall'] != null) return sub;
+  final detail = await ref.watch(ipoDetailProvider(id).future);
+  final overall = detail['subscription_total'];
+  if (overall == null) return sub;
+  return <String, dynamic>{
+    'available': true,
+    'overall': overall,
+    'qib': detail['subscription_qib'],
+    'nii': detail['subscription_nii'],
+    'retail': detail['subscription_retail'],
+    'employee': null,
+    'shareholder': null,
+    'is_final': false,
+    'source_type': detail['source'],
+    'updated_at': detail['source_synced_at'],
+  };
+});
+
+/// Financial performance + growth + valuation analysis for an IPO.
+final ipoFinancialsProvider =
+    FutureProvider.family<Map<String, dynamic>, String>((ref, id) {
+  return _fetchIntel(ref, '/ipos/$id/financials', 'ipo_financials:$id');
+});
+
 Future<void> refreshIpoFeed(Dio dio) async {
   try {
     await dio.post('/ipos/sync');

@@ -147,12 +147,6 @@ class HomeScreen extends ConsumerWidget {
                                 ],
                               ),
                             ),
-                            if (ipo['gmp_value'] != null)
-                              Chip(
-                                label: Text('GMP ${ipo['gmp_value']}*'),
-                                visualDensity: VisualDensity.compact,
-                                backgroundColor: Colors.amber.withValues(alpha: 0.15),
-                              ),
                           ],
                         ),
                       ),
@@ -162,13 +156,6 @@ class HomeScreen extends ConsumerWidget {
               },
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Text('Failed to load IPOs: $e'),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '* GMP is unofficial',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
             ),
           ],
         ),

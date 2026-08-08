@@ -444,6 +444,113 @@ impl IpoSyncService {
         .execute(&self.db)
         .await?;
 
+        self.persist_subscription(
+            ipo_id,
+            summary,
+            d,
+        )
+        .await
+        .ok();
+
+        Ok(())
+    }
+
+    /// Capture the current subscription state as a per-day history row plus a
+    /// latest snapshot (Milestone 4). Only real values observed from the NSE
+    /// bid-details are written; nothing is invented.
+    async fn persist_subscription(
+        &self,
+        ipo_id: Uuid,
+        summary: &NseIpoSummary,
+        d: &NseIpoDetail,
+    ) -> anyhow::Result<()> {
+        let overall = d.subscription_total.or(summary.subscription_total);
+        let retail = d.subscription_retail;
+        let qib = d.subscription_qib;
+        let nii = d.subscription_nii;
+        let employee = d.subscription_employee;
+        let shareholder = d.subscription_shareholder;
+
+        // Nothing observed (e.g. upcoming IPO before the issue opens): do not
+        // write an all-NULL snapshot. "Not available" is the honest answer.
+        if overall.is_none()
+            && retail.is_none()
+            && qib.is_none()
+            && nii.is_none()
+            && employee.is_none()
+            && shareholder.is_none()
+        {
+            return Ok(());
+        }
+
+        let status: Option<String> =
+            sqlx::query_scalar(r#"SELECT status::text FROM ipos WHERE id = $1"#)
+                .bind(ipo_id)
+                .fetch_optional(&self.db)
+                .await?;
+
+        let is_final = matches!(
+            status.as_deref(),
+            Some("closed") | Some("allotted") | Some("listed") | Some("withdrawn")
+        );
+
+        // Upsert latest snapshot.
+        sqlx::query(
+            r#"
+            INSERT INTO ipo_subscription_snapshots (
+                ipo_id, retail, nii, qib, employee, shareholder, overall, is_final, source, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'nse', NOW())
+            ON CONFLICT (ipo_id) DO UPDATE SET
+                retail = COALESCE(EXCLUDED.retail, ipo_subscription_snapshots.retail),
+                nii = COALESCE(EXCLUDED.nii, ipo_subscription_snapshots.nii),
+                qib = COALESCE(EXCLUDED.qib, ipo_subscription_snapshots.qib),
+                employee = COALESCE(EXCLUDED.employee, ipo_subscription_snapshots.employee),
+                shareholder = COALESCE(EXCLUDED.shareholder, ipo_subscription_snapshots.shareholder),
+                overall = COALESCE(EXCLUDED.overall, ipo_subscription_snapshots.overall),
+                is_final = EXCLUDED.is_final,
+                source = EXCLUDED.source,
+                updated_at = NOW()
+            "#,
+        )
+        .bind(ipo_id)
+        .bind(retail)
+        .bind(nii)
+        .bind(qib)
+        .bind(employee)
+        .bind(shareholder)
+        .bind(overall)
+        .bind(is_final)
+        .execute(&self.db)
+        .await?;
+
+        // Upsert a per-day history row (unique by ipo/day/source).
+        sqlx::query(
+            r#"
+            INSERT INTO ipo_subscription_history (
+                ipo_id, day, retail, nii, qib, employee, shareholder, overall, is_final, source, captured_at
+            ) VALUES ($1, CURRENT_DATE, $2, $3, $4, $5, $6, $7, $8, 'nse', NOW())
+            ON CONFLICT (ipo_id, day, source) DO UPDATE SET
+                retail = COALESCE(EXCLUDED.retail, ipo_subscription_history.retail),
+                nii = COALESCE(EXCLUDED.nii, ipo_subscription_history.nii),
+                qib = COALESCE(EXCLUDED.qib, ipo_subscription_history.qib),
+                employee = COALESCE(EXCLUDED.employee, ipo_subscription_history.employee),
+                shareholder = COALESCE(EXCLUDED.shareholder, ipo_subscription_history.shareholder),
+                overall = COALESCE(EXCLUDED.overall, ipo_subscription_history.overall),
+                is_final = EXCLUDED.is_final,
+                captured_at = NOW()
+            "#,
+        )
+        .bind(ipo_id)
+        .bind(retail)
+        .bind(nii)
+        .bind(qib)
+        .bind(employee)
+        .bind(shareholder)
+        .bind(overall)
+        .bind(is_final)
+        .execute(&self.db)
+        .await?;
+
         Ok(())
     }
 }

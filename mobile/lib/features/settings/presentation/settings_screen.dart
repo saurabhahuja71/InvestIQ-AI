@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/network/api_client.dart';
@@ -110,6 +111,15 @@ class SettingsScreen extends ConsumerWidget {
             title: Text('Investment disclaimer'),
             subtitle: Text(AppConstants.investmentDisclaimer),
             isThreeLine: true,
+          ),
+          ListTile(
+            leading: const Icon(Icons.support_agent),
+            title: const Text('Contact support'),
+            subtitle: const Text('saurabh@onenova.in'),
+            onTap: () => launchUrl(
+              Uri.parse('mailto:saurabh@onenova.in'),
+              mode: LaunchMode.externalApplication,
+            ),
           ),
           ListTile(
             leading: Icon(Icons.logout, color: Theme.of(context).colorScheme.error),

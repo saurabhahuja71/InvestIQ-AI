@@ -401,6 +401,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    InkWell(
+                      onTap: () => launchUrl(
+                        Uri.parse('mailto:saurabh@onenova.in'),
+                        mode: LaunchMode.externalApplication,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Text(
+                          'Contact: saurabh@onenova.in',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                color: scheme.primary,
+                                fontWeight: FontWeight.w600,
+                                decoration: TextDecoration.underline,
+                              ),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),

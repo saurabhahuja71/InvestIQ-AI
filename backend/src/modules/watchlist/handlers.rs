@@ -5,7 +5,7 @@
 //! - DELETE /watchlist/{id}      id = ipo_id
 
 use axum::extract::{Path, State};
-use axum::routing::{delete, get, post};
+use axum::routing::{delete, get};
 use axum::{Json, Router};
 use serde::Deserialize;
 use uuid::Uuid;
@@ -36,7 +36,7 @@ async fn list_watchlist(
         SELECT i.id, c.name AS company_name, c.symbol, i.board::text, i.status::text,
                i.price_band_low, i.price_band_high, i.issue_price, i.lot_size, i.min_investment,
                i.open_date, i.close_date, i.listing_date, i.exchange, i.subscription_total,
-               i.gmp_value, TRUE AS gmp_unofficial, c.logo_url, i.source, i.source_synced_at
+               c.logo_url, i.source, i.source_synced_at
         FROM ipo_watchlist w
         JOIN ipos i ON i.id = w.ipo_id
         JOIN companies c ON c.id = i.company_id

@@ -13,7 +13,9 @@ class ApiBase {
       connectTimeout: const Duration(seconds: 3),
       receiveTimeout: const Duration(seconds: 3),
       sendTimeout: const Duration(seconds: 3),
-      validateStatus: (s) => s != null && s >= 200 && s < 500,
+      // Only a real 2xx means this base serves the API. A website that
+      // responds 404 to /health must NOT be picked as the API origin.
+      validateStatus: (s) => s != null && s >= 200 && s < 300,
     ),
   );
 
@@ -38,7 +40,13 @@ class ApiBase {
         // ignore: avoid_print
         print('InvestIQ-API: probe $url');
         final res = await _probe.get<dynamic>(url);
-        if (res.statusCode != null && res.statusCode! >= 200 && res.statusCode! < 500) {
+        // A real 2xx that looks like our API. A website that returns 200 for
+        // every path (e.g. onenova.in) must NOT be picked — it would 405 the
+        // API routes later.
+        if (res.statusCode != null &&
+            res.statusCode! >= 200 &&
+            res.statusCode! < 300 &&
+            _looksLikeApi(res.data)) {
           _resolved = base;
           // ignore: avoid_print
           print('InvestIQ-API: using $base');
@@ -56,5 +64,17 @@ class ApiBase {
     // ignore: avoid_print
     print('InvestIQ-API: no candidate healthy; defaulting to $_resolved lastError=$lastError');
     return _resolved!;
+  }
+
+  /// True when the health payload is the InvestIQ API (e.g.
+  /// `{"service":"investiq-api","status":"ok"}`) rather than an HTML page.
+  static bool _looksLikeApi(dynamic body) {
+    if (body is! Map) return false;
+    final service = body['service']?.toString();
+    if (service == 'investiq-api') return true;
+    return body['status']?.toString() == 'ok' &&
+        body.keys.length <= 4 &&
+        !body.containsKey('html') &&
+        !body.containsKey('title');
   }
 }

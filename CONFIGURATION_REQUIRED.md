@@ -265,6 +265,24 @@ Optional Android-specific (if Web and Android app IDs differ):
 
 Gradle: if `google-services.json` is present, the Google Services plugin is applied automatically.
 
+### Android SHA fingerprints — verified 2026-08-08
+
+Debug keystore (`~/.android/debug.keystore`) fingerprints for the build currently installed on
+the Motorola (package `ai.investiq.investiq_ai`):
+
+```text
+SHA-1:   72:15:D2:22:BC:37:77:13:19:E1:E5:A8:DD:51:4C:A5:B3:9E:47:A3
+SHA-256: 18:A4:E6:67:FF:26:B3:59:7E:14:C4:2B:DD:38:38:8B:3C:D3:9A:E4:97:8C:2A:7E:FC:84:3A:7E:D6:A3:73:8C
+```
+
+- These match `google-services.json` → `client[0].oauth_client[0].android_info.certificate_hash`
+  (`7215d222…`, SHA-1) and the release-style `ac4e85ab…` entry already in the file.
+- If Google Sign-In fails after the account picker, add **both** fingerprints under
+  Firebase Console → Project settings → Your apps → Android app (`ai.investiq.investiq_ai`)
+  → Add fingerprint. Keep existing fingerprints (e.g. `AC:4E:85:…`).
+- The newest `google-services.json` from Firebase is at `mobile/android/app/google-services.json`
+  (gitignored; copy: `mobile/android/app/google-services.json.example`).
+
 ---
 
 ## Step 7 — Web OAuth authorized origins (Chrome)

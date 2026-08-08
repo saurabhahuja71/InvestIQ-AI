@@ -346,13 +346,14 @@ class _IpoCard extends ConsumerWidget {
     final high = ipo['price_band_high'];
     final band = (low == null && high == null)
         ? 'Not Available'
-        : '${low ?? '-'} - ${high ?? '-'}';
+        : '${low == null ? '-' : _money(low)} - ${high == null ? '-' : _money(high)}';
     final lot = ipo['lot_size']?.toString() ?? 'Not Available';
     final exchange = ipo['exchange']?.toString();
     final open = ipo['open_date']?.toString() ?? 'Not Available';
     final close = ipo['close_date']?.toString() ?? 'Not Available';
     final sub = ipo['subscription_total'];
-    final subLabel = sub == null ? null : '${sub}x';
+    final minInv = ipo['min_investment'];
+    final minInvLabel = minInv == null ? null : 'Min ₹${_money(minInv)}';
 
     return GlassCard(
       onTap: () => context.push('/ipos/$id'),
@@ -437,8 +438,9 @@ class _IpoCard extends ConsumerWidget {
               _MetaChip(label: board),
               if (exchange != null) _MetaChip(label: exchange),
               _MetaChip(label: 'Band $band'),
+              if (minInvLabel != null) _MetaChip(label: minInvLabel),
               _MetaChip(label: 'Lot $lot'),
-              if (subLabel != null) _MetaChip(label: 'Sub $subLabel'),
+              if (sub != null) _SubChip(value: sub),
             ],
           ),
           const SizedBox(height: 8),
@@ -451,6 +453,23 @@ class _IpoCard extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  static String _money(dynamic v) {
+    final d = double.tryParse('$v');
+    if (d == null) return '$v';
+    final s = d == d.roundToDouble() ? d.toInt().toString() : d.toStringAsFixed(2);
+    final neg = s.startsWith('-');
+    final digits = neg ? s.substring(1) : s;
+    final parts = digits.split('.');
+    final buf = StringBuffer();
+    final intPart = parts[0];
+    for (var i = 0; i < intPart.length; i++) {
+      if (i > 0 && (intPart.length - i) % 3 == 0) buf.write(',');
+      buf.write(intPart[i]);
+    }
+    if (parts.length > 1) buf.write('.${parts[1]}');
+    return '${neg ? '-' : ''}$buf';
   }
 
   String _initials(String name) {
@@ -478,6 +497,39 @@ class _MetaChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(label, style: Theme.of(context).textTheme.labelSmall),
+    );
+  }
+}
+
+/// Subscription chip coloured by strength so good demand stands out.
+class _SubChip extends StatelessWidget {
+  const _SubChip({required this.value});
+  final dynamic value;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = double.tryParse('$value');
+    final (color, label) = d == null
+        ? (Theme.of(context).colorScheme.outline, 'Sub —')
+        : d >= 3
+            ? (const Color(0xFF2E7D32), 'Sub ${d.toStringAsFixed(1)}x')
+            : d >= 1
+                ? (const Color(0xFFF9A825), 'Sub ${d.toStringAsFixed(1)}x')
+                : (Theme.of(context).colorScheme.error, 'Sub ${d.toStringAsFixed(1)}x');
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.55)),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w800,
+            ),
+      ),
     );
   }
 }
