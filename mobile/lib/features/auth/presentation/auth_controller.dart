@@ -67,14 +67,21 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
-  Future<void> register(String email, String password, String? name) async {
+  /// Creates the account after OTP verification. The user is NOT signed in
+  /// automatically — returns the server's success message to show.
+  Future<String> register(
+    String email,
+    String password,
+    String? name, {
+    required String otp,
+  }) async {
     try {
-      final user = await _repo.register(
+      return await _repo.register(
         email: email,
         password: password,
         fullName: name,
+        otp: otp,
       );
-      state = AuthState(status: AuthStatus.authenticated, user: user);
     } catch (e) {
       state = state.copyWith(error: e.toString());
       rethrow;

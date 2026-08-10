@@ -441,6 +441,7 @@ class _IpoCard extends ConsumerWidget {
               if (minInvLabel != null) _MetaChip(label: minInvLabel),
               _MetaChip(label: 'Lot $lot'),
               if (sub != null) _SubChip(value: sub),
+              _ScoreChip(id: id),
             ],
           ),
           const SizedBox(height: 8),
@@ -516,6 +517,43 @@ class _SubChip extends StatelessWidget {
             : d >= 1
                 ? (const Color(0xFFF9A825), 'Sub ${d.toStringAsFixed(1)}x')
                 : (Theme.of(context).colorScheme.error, 'Sub ${d.toStringAsFixed(1)}x');
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.55)),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w800,
+            ),
+      ),
+    );
+  }
+}
+
+/// InvestIQ Score chip coloured by quality so a strong score stands out.
+class _ScoreChip extends ConsumerWidget {
+  const _ScoreChip({required this.id});
+  final String id;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
+    final data = ref.watch(ipoScoreProvider(id)).valueOrNull;
+    final total = data?['total'];
+    final maxPoints = (data?['max_points'] as num?)?.toInt() ?? 100;
+    final score = total == null ? null : double.tryParse('$total');
+    final (color, label) = score == null
+        ? (scheme.outline, 'Score —')
+        : score >= 70
+            ? (const Color(0xFF2E7D32), 'Score ${score.round()}/$maxPoints')
+            : score >= 40
+                ? (const Color(0xFFF9A825), 'Score ${score.round()}/$maxPoints')
+                : (scheme.error, 'Score ${score.round()}/$maxPoints');
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(

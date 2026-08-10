@@ -16,6 +16,7 @@ use crate::state::AppState;
 
 pub fn router() -> Router<AppState> {
     Router::new()
+        .route("/register/otp", post(request_register_otp))
         .route("/register", post(register))
         .route("/login", post(login))
         .route("/google", post(google_auth))
@@ -54,20 +55,135 @@ fn token_hash(token: &str) -> String {
     hex::encode(hasher.finalize())
 }
 
-async fn register(
+const REGISTER_OTP_TTL_MINUTES: i64 = 10;
+const REGISTER_OTP_MAX_ATTEMPTS: i32 = 5;
+
+fn generate_otp() -> String {
+    let mut buf = [0u8; 4];
+    OsRng.fill_bytes(&mut buf);
+    format!("{:06}", u32::from_ne_bytes(buf) % 1_000_000)
+}
+
+/// Public: issues a 6-digit verification code for a new email registration.
+async fn request_register_otp(
     State(state): State<AppState>,
-    Json(body): Json<RegisterRequest>,
-) -> AppResult<Json<ApiResponse<AuthResponse>>> {
+    Json(body): Json<RequestRegisterOtpRequest>,
+) -> AppResult<Json<ApiResponse<RequestRegisterOtpResponse>>> {
     body.validate()
         .map_err(|e| AppError::Validation(e.to_string()))?;
 
     let email = body.email.trim().to_lowercase();
+
+    let exists: bool = sqlx::query_scalar(r#"SELECT EXISTS (SELECT 1 FROM users WHERE email = $1)"#)
+        .bind(&email)
+        .fetch_one(state.db())
+        .await?;
+    if exists {
+        return Err(AppError::Conflict("email already registered".into()));
+    }
+
+    let ttl = Duration::minutes(REGISTER_OTP_TTL_MINUTES);
+    let code = generate_otp();
+    let code_hash = token_hash(&code);
+
+    // Invalidate any prior unused code for this email.
+    sqlx::query(
+        r#"UPDATE email_verification_otps SET used_at = NOW()
+           WHERE email = $1 AND used_at IS NULL"#,
+    )
+    .bind(&email)
+    .execute(state.db())
+    .await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO email_verification_otps (email, otp_hash, expires_at)
+        VALUES ($1, $2, $3)
+        "#,
+    )
+    .bind(&email)
+    .bind(&code_hash)
+    .bind(Utc::now() + ttl)
+    .execute(state.db())
+    .await?;
+
+    tracing::info!(email = %email, "registration OTP issued");
+    Ok(Json(ApiResponse::ok(RequestRegisterOtpResponse {
+        sent: true,
+        otp: Some(code),
+        expires_in_secs: ttl.num_seconds(),
+    })))
+}
+
+/// Validates the email OTP before creating the account. On failure the latest
+/// unused code for the email gets one attempt counted (rate limiting).
+async fn verify_register_otp(
+    state: &AppState,
+    email: &str,
+    code: &str,
+) -> AppResult<()> {
+    let otp_id: Option<Uuid> = sqlx::query_scalar(
+        r#"
+        SELECT id FROM email_verification_otps
+        WHERE email = $1 AND otp_hash = $2 AND used_at IS NULL AND expires_at > NOW()
+        ORDER BY created_at DESC LIMIT 1
+        "#,
+    )
+    .bind(email)
+    .bind(&token_hash(code.trim()))
+    .fetch_optional(state.db())
+    .await?;
+
+    let Some(otp_id) = otp_id else {
+        sqlx::query(
+            r#"UPDATE email_verification_otps SET attempts = attempts + 1
+               WHERE id = (
+                 SELECT id FROM email_verification_otps
+                 WHERE email = $1 AND used_at IS NULL AND expires_at > NOW()
+                 ORDER BY created_at DESC LIMIT 1
+               )"#,
+        )
+        .bind(email)
+        .execute(state.db())
+        .await?;
+        return Err(AppError::Unauthorized("invalid or expired OTP".into()));
+    };
+
+    let attempts: i32 = sqlx::query_scalar(r#"SELECT attempts FROM email_verification_otps WHERE id = $1"#)
+        .bind(otp_id)
+        .fetch_one(state.db())
+        .await?;
+    if attempts >= REGISTER_OTP_MAX_ATTEMPTS {
+        return Err(AppError::Unauthorized(
+            "too many OTP attempts; request a new code".into(),
+        ));
+    }
+
+    sqlx::query(r#"UPDATE email_verification_otps SET used_at = NOW() WHERE id = $1"#)
+        .bind(otp_id)
+        .execute(state.db())
+        .await?;
+
+    Ok(())
+}
+
+async fn register(
+    State(state): State<AppState>,
+    Json(body): Json<RegisterRequest>,
+) -> AppResult<Json<ApiResponse<&'static str>>> {
+    body.validate()
+        .map_err(|e| AppError::Validation(e.to_string()))?;
+
+    let email = body.email.trim().to_lowercase();
+
+    verify_register_otp(&state, &email, &body.otp).await?;
+
     let password_hash = hash_password(&body.password)?;
 
     let user = sqlx::query_as::<_, UserRow>(
         r#"
-        INSERT INTO users (email, password_hash, full_name, auth_provider)
-        VALUES ($1, $2, $3, 'password')
+        INSERT INTO users (email, password_hash, full_name, auth_provider, email_verified)
+        VALUES ($1, $2, $3, 'password', TRUE)
         RETURNING id, email, password_hash, full_name, preferred_currency,
                   preferred_locale, theme_preference, biometric_enabled,
                   email_verified, created_at
@@ -93,8 +209,10 @@ async fn register(
     .execute(state.db())
     .await?;
 
-    let tokens = issue_tokens(&state, &user).await?;
-    Ok(Json(ApiResponse::ok(tokens)))
+    tracing::info!(email = %email, user_id = %user.id, "account created (OTP verified)");
+    Ok(Json(ApiResponse::ok(
+        "Account created successfully. Sign in with your email and password.",
+    )))
 }
 
 async fn login(

@@ -20,17 +20,34 @@ class AuthRepository {
   final SecureStorageService _storage;
   final GoogleAuthService _google;
 
-  Future<User> register({
+  /// Requests an email verification code for a new registration and returns
+  /// the code (no SMTP yet — the backend returns it for now).
+  Future<String> requestRegisterOtp(String email) async {
+    final res = await _dio.post('/auth/register/otp', data: {
+      'email': email.trim(),
+    });
+    final data = unwrapData(res, (d) => d as Map<String, dynamic>);
+    if (data['sent'] != true) {
+      throw StateError('Could not send the verification code. Try again.');
+    }
+    return data['otp']?.toString() ?? '';
+  }
+
+  /// Registers with a verified OTP. Does not persist a session — the user
+  /// signs in explicitly afterwards.
+  Future<String> register({
     required String email,
     required String password,
     String? fullName,
+    required String otp,
   }) async {
     final res = await _dio.post('/auth/register', data: {
       'email': email,
       'password': password,
       'full_name': fullName,
+      'otp': otp.trim(),
     });
-    return _persistAuth(res);
+    return unwrapData(res, (d) => d.toString());
   }
 
   Future<User> login({required String email, required String password}) async {

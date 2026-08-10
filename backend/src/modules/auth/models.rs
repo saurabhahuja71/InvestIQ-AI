@@ -11,6 +11,24 @@ pub struct RegisterRequest {
     #[validate(length(min = 8, max = 128))]
     pub password: String,
     pub full_name: Option<String>,
+    /// Email verification code issued by `POST /auth/register/otp`.
+    #[validate(length(min = 6, max = 6))]
+    pub otp: String,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct RequestRegisterOtpRequest {
+    #[validate(email)]
+    pub email: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RequestRegisterOtpResponse {
+    pub sent: bool,
+    /// Present when the code was generated (no SMTP yet, so the code is
+    /// returned to the app for now — mirroring the password-reset flow).
+    pub otp: Option<String>,
+    pub expires_in_secs: i64,
 }
 
 #[derive(Debug, Deserialize, Validate)]
