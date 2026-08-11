@@ -168,3 +168,65 @@ pub struct IntelMetaResponse {
     pub data_sources: Vec<DataSourceMeta>,
     pub freshness: DataSourceFreshness,
 }
+
+// ---- Milestone 5: IPO Investment Decision Engine ----
+
+/// One explainable factor behind an InvestIQ analysis conclusion. `detail`
+/// references the underlying metric and value so the user can verify the
+/// reasoning (e.g. "Revenue CAGR of 24% over FY2023–FY2025").
+#[derive(Debug, Clone, Serialize)]
+pub struct AnalysisFactor {
+    pub factor: String,
+    pub detail: Option<String>,
+}
+
+/// The full deterministic IPO analysis (see `decision.rs` for the exact
+/// methodology and `docs/IPO_DECISION_ENGINE.md` for the documented rules).
+#[derive(Debug, Serialize)]
+pub struct AnalysisResponse {
+    pub ipo_id: Uuid,
+    pub company_name: String,
+    pub board: String,
+    pub status: String,
+    /// InvestIQ Score (0–100), renormalized across scored components.
+    pub overall_score: Option<Decimal>,
+    /// Fundamentals composite (growth + profitability + balance sheet).
+    pub fundamental_score: Option<Decimal>,
+    /// Revenue + EPS/PAT growth composite (0–100).
+    pub growth_score: Option<Decimal>,
+    /// Margins / ROE / ROCE composite (0–100).
+    pub profitability_score: Option<Decimal>,
+    /// Debt-to-equity based (0–100, higher = stronger balance sheet).
+    pub balance_sheet_score: Option<Decimal>,
+    /// Valuation (0–100, lower P/E scores higher).
+    pub valuation_score: Option<Decimal>,
+    /// Official subscription multiple (0–100).
+    pub subscription_score: Option<Decimal>,
+    /// Risk safety (0–100, higher = lower risk).
+    pub risk_score: Option<Decimal>,
+    /// STRONG POSITIVE | POSITIVE | NEUTRAL | CAUTION | NEGATIVE | INSUFFICIENT DATA
+    pub long_term_view: &'static str,
+    /// STRONG POSITIVE | POSITIVE | NEUTRAL | CAUTION | NEGATIVE | INSUFFICIENT DATA
+    pub listing_view: &'static str,
+    /// HIGH | MEDIUM | LOW | INSUFFICIENT DATA
+    pub confidence: &'static str,
+    /// Percentage of the evaluation inputs that were actually available (0–100).
+    pub data_completeness: Decimal,
+    pub positive_factors: Vec<AnalysisFactor>,
+    pub negative_factors: Vec<AnalysisFactor>,
+    pub missing_data: Vec<String>,
+    /// Human label of the financial span used, e.g. "FY2023–FY2025".
+    pub financial_periods: Option<String>,
+    /// Retrieval timestamps for the underlying data (data-quality audit).
+    pub financials_retrieved_at: Option<DateTime<Utc>>,
+    pub subscription_updated_at: Option<DateTime<Utc>>,
+    pub ipo_synced_at: Option<DateTime<Utc>>,
+    /// Extensible market-sentiment slot (future GMP / demand indicators).
+    /// Always "Not Evaluated" in v1 — never fabricated.
+    pub market_sentiment: &'static str,
+    /// GMP is intentionally excluded from InvestIQ Analysis.
+    pub gmp: &'static str,
+    pub methodology_version: &'static str,
+    pub generated_at: DateTime<Utc>,
+    pub disclaimer: &'static str,
+}

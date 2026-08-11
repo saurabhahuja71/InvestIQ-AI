@@ -14,6 +14,9 @@ use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
 use crate::modules::common::ApiResponse;
+use crate::modules::ipo_intel::decision::{
+    compute_analysis, AnalysisInputs, ANALYSIS_DISCLAIMER, ANALYSIS_METHODOLOGY_VERSION,
+};
 use crate::modules::ipo_intel::logic::{
     analyze_series, compute_score, latest_yoy, ScoreInputs, SeriesPoint, SCORE_DISCLAIMER,
     SCORE_METHODOLOGY_VERSION,
@@ -30,6 +33,7 @@ pub fn router() -> Router<AppState> {
         )
         .route("/{id}/financials", axum::routing::get(get_financials))
         .route("/{id}/score", axum::routing::get(get_score))
+        .route("/{id}/analysis", axum::routing::get(get_analysis))
         .route("/{id}/data-sources", axum::routing::get(get_data_sources))
 }
 
@@ -428,6 +432,226 @@ async fn get_score(
         disclaimer: SCORE_DISCLAIMER.to_string(),
         computed_at: Utc::now(),
     })))
+}
+
+/// Milestone 5 — deterministic IPO Investment Decision Engine.
+///
+/// Assembles every available structured input for one IPO (company meta,
+/// official subscription, issue/valuation data, and the full financial period
+/// series) and hands it to the pure `decision::compute_analysis` engine. The
+/// result is persisted to `ipo_analysis` for audit/reproducibility and returned
+/// with the methodology version that produced it.
+async fn get_analysis(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> AppResult<Json<ApiResponse<AnalysisResponse>>> {
+    #[derive(sqlx::FromRow)]
+    struct IpoMeta {
+        company_name: String,
+        sector: Option<String>,
+        board: String,
+        status: String,
+        issue_price: Option<Decimal>,
+        subscription_total: Option<Decimal>,
+        subscription_qib: Option<Decimal>,
+        subscription_nii: Option<Decimal>,
+        subscription_retail: Option<Decimal>,
+        source_synced_at: Option<chrono::DateTime<Utc>>,
+        risks: serde_json::Value,
+    }
+
+    let meta = sqlx::query_as::<_, IpoMeta>(
+        r#"
+        SELECT c.name AS company_name, c.sector,
+               i.board::text AS board, i.status::text AS status,
+               i.issue_price,
+               i.subscription_total, i.subscription_qib, i.subscription_nii,
+               i.subscription_retail, i.source_synced_at, i.risks
+        FROM ipos i JOIN companies c ON c.id = i.company_id
+        WHERE i.id = $1
+        "#,
+    )
+    .bind(id)
+    .fetch_optional(state.db())
+    .await?
+    .ok_or_else(|| AppError::NotFound("IPO not found".into()))?;
+
+    let subscription_updated_at: Option<chrono::DateTime<Utc>> =
+        sqlx::query_scalar(r#"SELECT updated_at FROM ipo_subscription_snapshots WHERE ipo_id = $1"#)
+            .bind(id)
+            .fetch_optional(state.db())
+            .await?;
+
+    // Full financial period series (chronological) for deterministic growth.
+    #[derive(sqlx::FromRow)]
+    struct FinRow {
+        period: String,
+        period_end: Option<chrono::NaiveDate>,
+        revenue: Option<Decimal>,
+        revenue_growth_pct: Option<Decimal>,
+        pat: Option<Decimal>,
+        pat_growth_pct: Option<Decimal>,
+        eps: Option<Decimal>,
+        pe_ratio: Option<Decimal>,
+        ebitda_margin_pct: Option<Decimal>,
+        roe_pct: Option<Decimal>,
+        roce_pct: Option<Decimal>,
+        debt_to_equity: Option<Decimal>,
+    }
+
+    let rows = sqlx::query_as::<_, FinRow>(
+        r#"
+        SELECT period, period_end, revenue, revenue_growth_pct,
+               pat, pat_growth_pct, eps, pe_ratio,
+               ebitda_margin_pct, roe_pct, roce_pct, debt_to_equity
+        FROM ipo_financials WHERE ipo_id = $1 ORDER BY period ASC
+        "#,
+    )
+    .bind(id)
+    .fetch_all(state.db())
+    .await?;
+
+    let financials_retrieved_at: Option<chrono::DateTime<Utc>> =
+        sqlx::query_scalar::<_, Option<chrono::DateTime<Utc>>>(
+            r#"SELECT MAX(updated_at) FROM ipo_financials WHERE ipo_id = $1"#,
+        )
+        .bind(id)
+        .fetch_one(state.db())
+        .await?;
+
+    let to_series = |f: &dyn Fn(&FinRow) -> Option<Decimal>| -> Vec<SeriesPoint> {
+        rows.iter()
+            .map(|r| SeriesPoint {
+                period: r.period.clone(),
+                value: f(r),
+                period_end: r.period_end,
+            })
+            .collect()
+    };
+
+    let revenue_series = to_series(&|r: &FinRow| r.revenue);
+    let pat_series = to_series(&|r: &FinRow| r.pat);
+    let eps_series = to_series(&|r: &FinRow| r.eps);
+
+    let revenue_growth_pct = rows
+        .last()
+        .and_then(|r| r.revenue_growth_pct)
+        .or_else(|| latest_yoy(&revenue_series));
+    let pat_growth_pct = rows
+        .last()
+        .and_then(|r| r.pat_growth_pct)
+        .or_else(|| latest_yoy(&pat_series));
+    let eps_growth_pct = latest_yoy(&eps_series);
+
+    let latest = rows.last();
+    let pat_margin_pct = match (latest.and_then(|r| r.pat), latest.and_then(|r| r.revenue)) {
+        (Some(pat), Some(rev)) if rev > Decimal::ZERO => Some(pat / rev * Decimal::from(100)),
+        _ => None,
+    };
+
+    let risk_factors: Vec<String> = meta
+        .risks
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
+    let has_risks = !risk_factors.is_empty();
+
+    let inputs = AnalysisInputs {
+        board: meta.board.clone(),
+        sector: meta.sector,
+        subscription_overall: meta.subscription_total,
+        subscription_qib: meta.subscription_qib,
+        subscription_nii: meta.subscription_nii,
+        subscription_retail: meta.subscription_retail,
+        issue_price: meta.issue_price,
+        eps: latest.and_then(|r| r.eps),
+        pe_ratio: latest.and_then(|r| r.pe_ratio),
+        debt_to_equity: latest.and_then(|r| r.debt_to_equity),
+        ebitda_margin_pct: latest.and_then(|r| r.ebitda_margin_pct),
+        pat_margin_pct,
+        roe_pct: latest.and_then(|r| r.roe_pct),
+        roce_pct: latest.and_then(|r| r.roce_pct),
+        revenue_growth_pct,
+        pat_growth_pct,
+        eps_growth_pct,
+        revenue_series,
+        pat_series,
+        eps_series,
+        period_labels: rows.iter().map(|r| r.period.clone()).collect(),
+        financials_retrieved_at,
+        subscription_updated_at,
+        ipo_synced_at: meta.source_synced_at,
+        has_risks,
+        risk_factors,
+    };
+
+    let result = compute_analysis(&inputs);
+
+    let score_dec = |s: Option<f64>| -> Option<Decimal> {
+        s.and_then(|x| Decimal::from_f64_retain((x * 10.0).round() / 10.0))
+    };
+
+    let factors = |v: Vec<(String, Option<String>)>| -> Vec<AnalysisFactor> {
+        v.into_iter()
+            .map(|(factor, detail)| AnalysisFactor { factor, detail })
+            .collect()
+    };
+
+    let response = AnalysisResponse {
+        ipo_id: id,
+        company_name: meta.company_name,
+        board: meta.board,
+        status: meta.status,
+        overall_score: score_dec(result.overall_score),
+        fundamental_score: score_dec(result.fundamental_score),
+        growth_score: score_dec(result.growth_score),
+        profitability_score: score_dec(result.profitability_score),
+        balance_sheet_score: score_dec(result.balance_sheet_score),
+        valuation_score: score_dec(result.valuation_score),
+        subscription_score: score_dec(result.subscription_score),
+        risk_score: score_dec(result.risk_score),
+        long_term_view: result.long_term_view.as_str(),
+        listing_view: result.listing_view.as_str(),
+        confidence: result.confidence.as_str(),
+        data_completeness: score_dec(Some(result.data_completeness)).unwrap_or_default(),
+        positive_factors: factors(result.positive_factors),
+        negative_factors: factors(result.negative_factors),
+        missing_data: result.missing_data,
+        financial_periods: result.financial_periods,
+        financials_retrieved_at: result.financials_retrieved_at,
+        subscription_updated_at: result.subscription_updated_at,
+        ipo_synced_at: result.ipo_synced_at,
+        market_sentiment: "Not Evaluated",
+        gmp: "Not Evaluated",
+        methodology_version: ANALYSIS_METHODOLOGY_VERSION,
+        generated_at: Utc::now(),
+        disclaimer: ANALYSIS_DISCLAIMER,
+    };
+
+    // Persist for audit/reproducibility (methodology version stored alongside).
+    let payload = serde_json::to_value(&response).unwrap_or_else(|_| serde_json::json!({}));
+    let _ = sqlx::query(
+        r#"
+        INSERT INTO ipo_analysis (ipo_id, payload, methodology_version, computed_at)
+        VALUES ($1, $2, $3, NOW())
+        ON CONFLICT (ipo_id) DO UPDATE SET
+            payload = EXCLUDED.payload,
+            methodology_version = EXCLUDED.methodology_version,
+            computed_at = NOW()
+        "#,
+    )
+    .bind(id)
+    .bind(payload)
+    .bind(ANALYSIS_METHODOLOGY_VERSION)
+    .execute(state.db())
+    .await
+    .ok();
+
+    Ok(Json(ApiResponse::ok(response)))
 }
 
 /// Document every externally sourced data category for this IPO: provider,

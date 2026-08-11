@@ -147,7 +147,7 @@ pub struct DataQuality {
     pub missing: Vec<String>,
 }
 
-fn as_f64(d: Option<Decimal>) -> Option<f64> {
+pub(crate) fn as_f64(d: Option<Decimal>) -> Option<f64> {
     d.map(|v| v.to_string().parse::<f64>().unwrap_or(0.0))
 }
 
@@ -247,7 +247,7 @@ pub fn analyze_series(label: &'static str, points: &[SeriesPoint]) -> MetricAnal
 }
 
 /// Revenue Growth (0–15). Negative growth scores 0.
-fn revenue_growth(growth_pct: Option<Decimal>) -> ComponentScore {
+pub(crate) fn revenue_growth(growth_pct: Option<Decimal>) -> ComponentScore {
     let (key, label, max) = ("revenue_growth", "Revenue Growth", 15u32);
     let Some(g) = as_f64(growth_pct) else {
         return ComponentScore::insufficient(
@@ -280,7 +280,7 @@ fn revenue_growth(growth_pct: Option<Decimal>) -> ComponentScore {
 
 /// EPS / PAT Growth (0–20). EPS growth is primary; PAT growth is used when EPS
 /// is unavailable, and the two are blended 50/50 when both are present.
-fn earnings_growth(
+pub(crate) fn earnings_growth(
     eps_growth_pct: Option<Decimal>,
     pat_growth_pct: Option<Decimal>,
 ) -> ComponentScore {
@@ -336,7 +336,7 @@ fn earnings_growth(
 /// Profitability & Margins (0–15): average of every available profitability
 /// signal (PAT margin, EBITDA margin, ROE, ROCE), each scaled with a 35%
 /// ceiling for full marks and 0 for non-positive values.
-fn profitability(
+pub(crate) fn profitability(
     pat_margin_pct: Option<Decimal>,
     ebitda_margin_pct: Option<Decimal>,
     roe_pct: Option<Decimal>,
@@ -375,7 +375,7 @@ fn profitability(
 }
 
 /// Balance Sheet / Debt (0–10) from the debt-to-equity ratio.
-fn balance_sheet(debt_to_equity: Option<Decimal>) -> ComponentScore {
+pub(crate) fn balance_sheet(debt_to_equity: Option<Decimal>) -> ComponentScore {
     let (key, label, max) = ("balance_sheet", "Balance Sheet / Debt", 10u32);
     let Some(de) = as_f64(debt_to_equity) else {
         return ComponentScore::insufficient(
@@ -401,7 +401,7 @@ fn balance_sheet(debt_to_equity: Option<Decimal>) -> ComponentScore {
 
 /// Valuation (0–15). Uses the vendor P/E when present, otherwise derives it as
 /// `issue price / EPS`. Loss-making companies (P/E <= 0) score 0.
-fn valuation(
+pub(crate) fn valuation(
     pe_ratio: Option<Decimal>,
     issue_price: Option<Decimal>,
     eps: Option<Decimal>,
@@ -436,7 +436,7 @@ fn valuation(
 }
 
 /// IPO Subscription (0–15) from the official exchange subscription multiple.
-fn subscription(overall: Option<Decimal>) -> ComponentScore {
+pub(crate) fn subscription(overall: Option<Decimal>) -> ComponentScore {
     let (key, label, max) = ("subscription", "IPO Subscription", 15u32);
     let Some(s) = as_f64(overall) else {
         return ComponentScore::insufficient(
@@ -479,7 +479,7 @@ fn industry_business(_sector: Option<String>) -> ComponentScore {
 /// Risk Factors (0–5, higher = lower risk). Penalties for SME board, high
 /// leverage, and disclosed risk items. Only scored when at least one real risk
 /// signal exists; a mainboard with no data yields "insufficient data".
-fn risk(board: &str, debt_to_equity: Option<Decimal>, has_risks: bool) -> ComponentScore {
+pub(crate) fn risk(board: &str, debt_to_equity: Option<Decimal>, has_risks: bool) -> ComponentScore {
     let (key, label, max) = ("risk", "Risk Factors", 5u32);
     let sme = board.eq_ignore_ascii_case("sme");
     if debt_to_equity.is_none() && !has_risks && !sme {

@@ -8,6 +8,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/widgets/glass_card.dart';
 import '../../watchlist/presentation/watchlist_providers.dart';
+import 'ipo_analysis_section.dart';
 import 'ipo_providers.dart';
 
 class IpoDetailScreen extends ConsumerWidget {
@@ -53,6 +54,7 @@ class IpoDetailScreen extends ConsumerWidget {
               ref.invalidate(ipoScoreProvider(id));
               ref.invalidate(ipoSubscriptionProvider(id));
               ref.invalidate(ipoFinancialsProvider(id));
+              ref.invalidate(ipoAnalysisProvider(id));
             },
             icon: const Icon(Icons.refresh),
           ),
@@ -65,12 +67,14 @@ class IpoDetailScreen extends ConsumerWidget {
             ref.invalidate(ipoScoreProvider(id));
             ref.invalidate(ipoSubscriptionProvider(id));
             ref.invalidate(ipoFinancialsProvider(id));
+            ref.invalidate(ipoAnalysisProvider(id));
           },
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
               _Header(ipo: ipo),
               const SizedBox(height: 12),
+              IpoAnalysisSection(ipoId: id),
               _Section(
                 title: 'Overview',
                 child: Text(

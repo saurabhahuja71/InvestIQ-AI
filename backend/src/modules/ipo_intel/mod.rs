@@ -6,7 +6,13 @@
 //! fields are reported as "Not available". GMP is excluded from all production
 //! responses in v1 but the schema/architecture remains extensible for a future
 //! market-sentiment provider.
+//!
+//! Milestone 5 adds the deterministic IPO Investment Decision Engine
+//! (`decision.rs`): long-term and listing views, per-dimension scores,
+//! confidence, data completeness and explainable positive/negative factors —
+//! all derived without an LLM.
 
+pub mod decision;
 pub mod handlers;
 pub mod logic;
 pub mod models;

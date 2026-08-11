@@ -231,6 +231,16 @@ final ipoFinancialsProvider =
   return _fetchIntel(ref, '/ipos/$id/financials', 'ipo_financials:$id');
 });
 
+/// Deterministic InvestIQ decision engine output: views, confidence,
+/// positive/negative factors, data quality and methodology metadata.
+///
+/// Renders the M5 "InvestIQ IPO View" / "Why InvestIQ Thinks This" /
+/// "Data Quality" cards on the IPO Detail screen.
+final ipoAnalysisProvider =
+    FutureProvider.family<Map<String, dynamic>, String>((ref, id) {
+  return _fetchIntel(ref, '/ipos/$id/analysis', 'ipo_analysis:$id');
+});
+
 Future<void> refreshIpoFeed(Dio dio) async {
   try {
     await dio.post('/ipos/sync');
